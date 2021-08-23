@@ -58,9 +58,12 @@ public abstract class CuratorFrameworkUtils {
 
     public static CuratorFramework buildCuratorFramework(URL connectionURL) throws Exception {
         CuratorFramework curatorFramework = CuratorFrameworkFactory.builder()
+                // 设置 zookeeper 地址，设置的 backup 也会读取进来，以逗号分隔
                 .connectString(connectionURL.getBackupAddress())
+                // 设置重试策略
                 .retryPolicy(buildRetryPolicy(connectionURL))
                 .build();
+        // 启动这个 zookeeper 客户端
         curatorFramework.start();
         curatorFramework.blockUntilConnected(BLOCK_UNTIL_CONNECTED_WAIT.getParameterValue(connectionURL),
                 BLOCK_UNTIL_CONNECTED_UNIT.getParameterValue(connectionURL));

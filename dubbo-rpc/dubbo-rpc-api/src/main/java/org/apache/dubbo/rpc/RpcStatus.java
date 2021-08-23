@@ -32,21 +32,56 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class RpcStatus {
 
+    /**
+     * 基于服务 URL 为维度的 RpcStatus 集合
+     *
+     * key：URL
+     */
     private static final ConcurrentMap<String, RpcStatus> SERVICE_STATISTICS = new ConcurrentHashMap<String,
             RpcStatus>();
 
+    /**
+     * 基于服务 URL + 方法维度的 RpcStatus 集合
+     *
+     * key1：URL
+     * key2：方法名
+     */
     private static final ConcurrentMap<String, ConcurrentMap<String, RpcStatus>> METHOD_STATISTICS =
             new ConcurrentHashMap<String, ConcurrentMap<String, RpcStatus>>();
 
     private final ConcurrentMap<String, Object> values = new ConcurrentHashMap<String, Object>();
 
+    /**
+     * 调用中的次数
+     */
     private final AtomicInteger active = new AtomicInteger();
+    /**
+     * 总调用次数
+     */
     private final AtomicLong total = new AtomicLong();
+    /**
+     * 总调用失败次数
+     */
     private final AtomicInteger failed = new AtomicInteger();
+    /**
+     * 总调用时长，单位：毫秒
+     */
     private final AtomicLong totalElapsed = new AtomicLong();
+    /**
+     * 总调用失败时长，单位：毫秒
+     */
     private final AtomicLong failedElapsed = new AtomicLong();
+    /**
+     * 最大调用时长，单位：毫秒
+     */
     private final AtomicLong maxElapsed = new AtomicLong();
+    /**
+     * 最大调用失败时长，单位：毫秒
+     */
     private final AtomicLong failedMaxElapsed = new AtomicLong();
+    /**
+     * 最大调用成功时长，单位：毫秒
+     */
     private final AtomicLong succeededMaxElapsed = new AtomicLong();
 
     private RpcStatus() {
@@ -99,6 +134,7 @@ public class RpcStatus {
      * @param url
      */
     public static boolean beginCount(URL url, String methodName, int max) {
+        // 默认取 Integer 最大值
         max = (max <= 0) ? Integer.MAX_VALUE : max;
         RpcStatus appStatus = getStatus(url);
         RpcStatus methodStatus = getStatus(url, methodName);

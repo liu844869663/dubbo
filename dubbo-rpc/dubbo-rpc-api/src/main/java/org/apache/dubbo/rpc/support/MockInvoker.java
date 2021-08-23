@@ -48,8 +48,20 @@ import static org.apache.dubbo.rpc.Constants.RETURN_PREFIX;
 import static org.apache.dubbo.rpc.Constants.THROW_PREFIX;
 
 final public class MockInvoker<T> implements Invoker<T> {
+
+    /**
+     * ProxyFactory 扩展点实现类自适应对象
+     */
     private static final ProxyFactory PROXY_FACTORY = ExtensionLoader.getExtensionLoader(ProxyFactory.class).getAdaptiveExtension();
+    /**
+     * 缓存的 Mock Invoker 对象
+     * key：mock 配置的服务名
+     */
     private static final Map<String, Invoker<?>> MOCK_MAP = new ConcurrentHashMap<String, Invoker<?>>();
+    /**
+     * 缓存的 Mock 异常
+     * key：mock 配置的服务名
+     */
     private static final Map<String, Throwable> THROWABLE_MAP = new ConcurrentHashMap<String, Throwable>();
 
     private final URL url;
@@ -100,32 +112,43 @@ final public class MockInvoker<T> implements Invoker<T> {
             ((RpcInvocation) invocation).setInvoker(this);
         }
 
-        String mock = getUrl().getMethodParameter(invocation.getMethodName(),MOCK_KEY);
+        // 获取这个方法的 `mock` 配置
+        String mock = getUrl().getMethodParameter(invocation.getMethodName(), MOCK_KEY);
 
+        // 为空的话则抛出异常
         if (StringUtils.isBlank(mock)) {
             throw new RpcException(new IllegalAccessException("mock can not be null. url :" + url));
         }
+        // 对这个 `mock` 配置进行正常化进行处理
         mock = normalizeMock(URL.decode(mock));
-        if (mock.startsWith(RETURN_PREFIX)) {
+        if (mock.startsWith(RETURN_PREFIX)) { // 以 return 开头
+            // 截取 return 后面的值
             mock = mock.substring(RETURN_PREFIX.length()).trim();
             try {
                 Type[] returnTypes = RpcUtils.getReturnTypes(invocation);
+                // 将这个默认返回的值转换成 Java 类型
                 Object value = parseMockValue(mock, returnTypes);
+                // 创建一个 Result 返回
                 return AsyncRpcResult.newDefaultAsyncResult(value, invocation);
             } catch (Exception ew) {
                 throw new RpcException("mock return invoke error. method :" + invocation.getMethodName()
                         + ", mock:" + mock + ", url: " + url, ew);
             }
-        } else if (mock.startsWith(THROW_PREFIX)) {
+        } else if (mock.startsWith(THROW_PREFIX)) { // 以 throw 开头
+            // 截取 throw 后面的值
             mock = mock.substring(THROW_PREFIX.length()).trim();
             if (StringUtils.isBlank(mock)) {
                 throw new RpcException("mocked exception for service degradation.");
             } else { // user customized class
+                // 转换成对应的 Throwable 镀锡
                 Throwable t = getThrowable(mock);
+                // 抛出这个异常
                 throw new RpcException(RpcException.BIZ_EXCEPTION, t);
             }
         } else { //impl mock
             try {
+                // 使用配置的自定义 Mock 类，执行自定义逻辑
+                // 默认使用获取本地的 `服务名称+Mock` 名称的类，创建代理对象，执行该方法
                 Invoker<T> invoker = getInvoker(mock);
                 return invoker.invoke(invocation);
             } catch (Throwable t) {

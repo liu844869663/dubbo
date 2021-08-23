@@ -67,6 +67,11 @@ import static org.apache.dubbo.common.constants.FilterConstants.CACHE_KEY;
 @Activate(group = {CONSUMER, PROVIDER}, value = CACHE_KEY)
 public class CacheFilter implements Filter {
 
+    /**
+     * CacheFactory$Adaptive 对象
+     *
+     * 通过 Dubbo SPI 机制，调用 {@link #setCacheFactory(CacheFactory)} 方法，进行注入
+     */
     private CacheFactory cacheFactory;
 
     /**
@@ -91,10 +96,14 @@ public class CacheFilter implements Filter {
      */
     @Override
     public Result invoke(Invoker<?> invoker, Invocation invocation) throws RpcException {
+        // 如果方法开启 Cache 功能
         if (cacheFactory != null && ConfigUtils.isNotEmpty(invoker.getUrl().getMethodParameter(invocation.getMethodName(), CACHE_KEY))) {
+            // 基于 URL + Method 为维度，获得 Cache 对象
             Cache cache = cacheFactory.getCache(invoker.getUrl(), invocation);
             if (cache != null) {
+                // 获得 Cache Key
                 String key = StringUtils.toArgumentString(invocation.getArguments());
+                // 从缓存中获得结果。若存在，创建 RpcResult 对象。
                 Object value = cache.get(key);
                 if (value != null) {
                     if (value instanceof ValueWrapper) {
@@ -103,13 +112,16 @@ public class CacheFilter implements Filter {
                         return AsyncRpcResult.newDefaultAsyncResult(value, invocation);
                     }
                 }
+                // 服务调用
                 Result result = invoker.invoke(invocation);
+                // 若非异常结果，缓存结果
                 if (!result.hasException()) {
                     cache.put(key, new ValueWrapper(result.getValue()));
                 }
                 return result;
             }
         }
+        // 服务调用
         return invoker.invoke(invocation);
     }
 

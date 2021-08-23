@@ -54,6 +54,9 @@ public class HttpProtocol extends AbstractProxyProtocol {
 
     private final Map<String, JsonRpcServer> skeletonMap = new ConcurrentHashMap<>();
 
+    /**
+     * HttpBinder 对象
+     */
     private HttpBinder httpBinder;
 
     public HttpProtocol() {
@@ -64,6 +67,7 @@ public class HttpProtocol extends AbstractProxyProtocol {
         this.httpBinder = httpBinder;
     }
 
+    // 默认服务器端口
     @Override
     public int getDefaultPort() {
         return 80;
@@ -81,6 +85,7 @@ public class HttpProtocol extends AbstractProxyProtocol {
         public void handle(HttpServletRequest request, HttpServletResponse response)
                 throws ServletException {
             String uri = request.getRequestURI();
+            // 从本地缓存中获取 JsonRpcServer 对象
             JsonRpcServer skeleton = skeletonMap.get(uri);
             if (cors) {
                 response.setHeader(ACCESS_CONTROL_ALLOW_ORIGIN_HEADER, "*");
@@ -93,6 +98,7 @@ public class HttpProtocol extends AbstractProxyProtocol {
 
                 RpcContext.getContext().setRemoteAddress(request.getRemoteAddr(), request.getRemotePort());
                 try {
+                    // 执行调用
                     skeleton.handle(request.getInputStream(), response.getOutputStream());
                 } catch (Throwable e) {
                     throw new ServletException(e);
@@ -106,16 +112,23 @@ public class HttpProtocol extends AbstractProxyProtocol {
 
     @Override
     protected <T> Runnable doExport(final T impl, Class<T> type, URL url) throws RpcException {
+        // 获得服务器地址
         String addr = getAddr(url);
+        // 从缓存中获取 ProtocolServer 对象
         ProtocolServer protocolServer = serverMap.get(addr);
         if (protocolServer == null) {
+            // 默认使用 JettyHttpBinder 创建一个 JettyHttpServer 对象，Servlet 容器
             RemotingServer remotingServer = httpBinder.bind(url, new InternalHandler(url.getParameter("cors", false)));
+            // 包装成 ProxyProtocolServer 对象放入缓存中
             serverMap.put(addr, new ProxyProtocolServer(remotingServer));
         }
+        // 获取绝对路径
         final String path = url.getAbsolutePath();
+        // 获取泛化调用的路径
         final String genericPath = path + "/" + GENERIC_KEY;
         ObjectMapper mapper = new ObjectMapper();
         mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        // 创建两个 JsonRpcServer 对象放入缓存中
         JsonRpcServer skeleton = new JsonRpcServer(mapper, impl, type);
         JsonRpcServer genericServer = new JsonRpcServer(mapper, impl, GenericService.class);
         skeletonMap.put(path, skeleton);
@@ -149,6 +162,7 @@ public class HttpProtocol extends AbstractProxyProtocol {
         jsonRpcProxyFactoryBean.setServiceInterface(serviceType);
 
         jsonProxyFactoryBean.afterPropertiesSet();
+        // 返回一个动态代理对象（Spring AOP），在拦截的方法中借助 JSON-RPC 的 JsonRpcHttpClient 实现的
         return (T) jsonProxyFactoryBean.getObject();
     }
 

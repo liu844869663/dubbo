@@ -64,10 +64,15 @@ public abstract class DubboBeanUtils {
     public static void registerCommonBeans(BeanDefinitionRegistry registry) {
 
         // Since 2.5.7 Register @Reference Annotation Bean Processor as an infrastructure Bean
+        // 注册一个 ReferenceAnnotationBeanPostProcessor 对象（内部角色），InstantiationAwareBeanPostProcessor 的实现类
+        // 用于处理 `@DubboReference` `@Reference` 标注的字段，注入对应的 Bean
+        // 过程大致就是先根据注解等 Dubbo 配置生成一个 ReferenceBean，然后调用其 get() 方法创建一个动态代理对象，然后进行注入
         registerInfrastructureBean(registry, ReferenceAnnotationBeanPostProcessor.BEAN_NAME,
                 ReferenceAnnotationBeanPostProcessor.class);
 
         // Since 2.7.4 [Feature] https://github.com/apache/dubbo/issues/5093
+        // 注册一个 DubboConfigAliasPostProcessor 对象（内部角色），BeanPostProcessor 的实现类
+        // 用于处理 Dubbo 配置类（AbstractConfig）的 id，有的话将其作为这个 Bean 的别名，这样就可通过 id 获取对应的配置类了
         registerInfrastructureBean(registry, DubboConfigAliasPostProcessor.BEAN_NAME,
                 DubboConfigAliasPostProcessor.class);
 
@@ -80,16 +85,21 @@ public abstract class DubboBeanUtils {
 
         // Since 2.7.4 Register DubboBootstrapApplicationListener as an infrastructure Bean
         // registerInfrastructureBean(registry, DubboBootstrapApplicationListener.BEAN_NAME,
-        //        DubboBootstrapApplicationListener.class);
-
+        //        DubboBootstrapApplication istrar 对象（内部角色），ApplicationContextAware 的实现类
+        // 目的就是注册 DubboBootstrapApplicationListener 和 DubboLifecycleComponentApplicationListener 两个监听器
+        // 都是监听 Spring 应用上下文的刷新和关闭事件，前者用于启动和关闭 DubboBootstrap 启动器，后者用于启动和关闭 Dubbo 的 Lifecycle 生命周期组件
         registerInfrastructureBean(registry, DubboApplicationListenerRegistrar.BEAN_NAME,
                 DubboApplicationListenerRegistrar.class);
 
         // Since 2.7.6 Register DubboConfigDefaultPropertyValueBeanPostProcessor as an infrastructure Bean
+        // 注册一个 DubboConfigDefaultPropertyValueBeanPostProcessor 对象（内部角色），BeanPostProcessor 的实现类
+        // 目的就是默认设置 Bean 的 `id` 和 `name` 为 Bean 的名称，如果是协议配置类的话，`name` 设置为 `dubbo`，默认为 Dubbo 协议
         registerInfrastructureBean(registry, DubboConfigDefaultPropertyValueBeanPostProcessor.BEAN_NAME,
                 DubboConfigDefaultPropertyValueBeanPostProcessor.class);
 
         // Since 2.7.9 Register DubboConfigEarlyInitializationPostProcessor as an infrastructure Bean
+        // 注册一个 DubboConfigEarlyInitializationPostProcessor 对象（内部角色），BeanDefinitionRegistryPostProcessor 的实现类
+        // 目的就是防止 Dubbo 的相关配置类过早的初始化，导致没有添加到 ConfigManager 管理器中
         registerInfrastructureBean(registry, DubboConfigEarlyInitializationPostProcessor.BEAN_NAME,
                 DubboConfigEarlyInitializationPostProcessor.class);
     }

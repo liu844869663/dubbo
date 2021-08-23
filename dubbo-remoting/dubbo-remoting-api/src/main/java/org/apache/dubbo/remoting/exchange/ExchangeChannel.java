@@ -23,6 +23,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 
 /**
+ * 信息交换通道接口
+ * <p>
  * ExchangeChannel. (API/SPI, Prototype, ThreadSafe)
  */
 public interface ExchangeChannel extends Channel {
@@ -49,15 +51,20 @@ public interface ExchangeChannel extends Channel {
     CompletableFuture<Object> request(Object request, int timeout) throws RemotingException;
 
     /**
+     * 发送请求
+     * <p>
      * send request.
      *
      * @param request
+     * @param executor
      * @return response future
      * @throws RemotingException
      */
     CompletableFuture<Object> request(Object request, ExecutorService executor) throws RemotingException;
 
     /**
+     * 发送请求，设置超时时间
+     * <p>
      * send request.
      *
      * @param request
@@ -68,6 +75,8 @@ public interface ExchangeChannel extends Channel {
     CompletableFuture<Object> request(Object request, int timeout, ExecutorService executor) throws RemotingException;
 
     /**
+     * 获得信息交换处理器
+     * <p>
      * get message handler.
      *
      * @return message handler
@@ -75,6 +84,8 @@ public interface ExchangeChannel extends Channel {
     ExchangeHandler getExchangeHandler();
 
     /**
+     * 优雅关闭
+     * <p>
      * graceful close.
      *
      * @param timeout

@@ -20,11 +20,16 @@ import org.apache.dubbo.common.URL;
 import org.apache.dubbo.remoting.zookeeper.ZookeeperClient;
 import org.apache.dubbo.remoting.zookeeper.support.AbstractZookeeperTransporter;
 
+/**
+ * Curator 客户端的创建
+ */
 public class CuratorZookeeperTransporter extends AbstractZookeeperTransporter {
+
     @Override
     public ZookeeperClient createZookeeperClient(URL url) {
+        // 这里仅创建一个 CuratorZookeeperClient 对象
+        // 具体的与 zk 连接的相关工作在构造器中进行
         return new CuratorZookeeperClient(url);
     }
-
 
 }

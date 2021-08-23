@@ -67,18 +67,43 @@ public abstract class DynamicDirectory<T> extends AbstractDirectory<T> implement
     protected static final RouterFactory ROUTER_FACTORY = ExtensionLoader.getExtensionLoader(RouterFactory.class)
             .getAdaptiveExtension();
 
+    /**
+     * 服务键，例如 分组/服务名称:版本号
+     */
     protected final String serviceKey; // Initialization at construction time, assertion not null
+    /**
+     * 接口类型
+     */
     protected final Class<T> serviceType; // Initialization at construction time, assertion not null
+
     protected final URL directoryUrl; // Initialization at construction time, assertion not null, and always assign non null value
+    /**
+     * 是否是多分组
+     */
     protected final boolean multiGroup;
     protected Protocol protocol; // Initialization at the time of injection, the assertion is not null
+    /**
+     * 注册中心对象
+     */
     protected Registry registry; // Initialization at the time of injection, the assertion is not null
+    /**
+     * 是否禁止访问
+     */
     protected volatile boolean forbidden = false;
+    /**
+     * 是否应该注册
+     */
     protected boolean shouldRegister;
+    /**
+     * 注册时是否应该简化参数
+     */
     protected boolean shouldSimplified;
 
     protected volatile URL overrideDirectoryUrl; // Initialization at construction time, assertion not null, and always assign non null value
 
+    /**
+     * 主要注册的消费者 URL 对象
+     */
     protected volatile URL registeredConsumerUrl;
 
     /**
@@ -89,6 +114,9 @@ public abstract class DynamicDirectory<T> extends AbstractDirectory<T> implement
      */
     protected volatile List<Configurator> configurators; // The initial value is null and the midway may be assigned to null, please use the local variable reference
 
+    /**
+     * 对应服务提供者的 Invoker 对象们
+     */
     protected volatile List<Invoker<T>> invokers;
     // Set<invokerUrls> cache invokeUrls to invokers mapping.
 
@@ -150,7 +178,9 @@ public abstract class DynamicDirectory<T> extends AbstractDirectory<T> implement
     }
 
     public void subscribe(URL url) {
+        // 设置消费者 URL
         setConsumerUrl(url);
+        // 向注册中心订阅服务，回调监听器也就是当前对象
         registry.subscribe(url, this);
     }
 
@@ -161,6 +191,7 @@ public abstract class DynamicDirectory<T> extends AbstractDirectory<T> implement
 
     @Override
     public List<Invoker<T>> doList(Invocation invocation) {
+        // 禁止访问，则抛出异常
         if (forbidden) {
             // 1. No service provider 2. Service providers are disabled
             throw new RpcException(RpcException.FORBIDDEN_EXCEPTION, "No provider available from registry " +
@@ -169,6 +200,7 @@ public abstract class DynamicDirectory<T> extends AbstractDirectory<T> implement
                     ", please check status of providers(disabled, not registered or in blacklist).");
         }
 
+        // 多分组，则全部返回
         if (multiGroup) {
             return this.invokers == null ? Collections.emptyList() : this.invokers;
         }
@@ -176,6 +208,7 @@ public abstract class DynamicDirectory<T> extends AbstractDirectory<T> implement
         List<Invoker<T>> invokers = null;
         try {
             // Get invokers from cache, only runtime routers will be executed.
+            // 返回匹配路由规则的 Invoker 们
             invokers = routerChain.route(getConsumerUrl(), invocation);
         } catch (Throwable t) {
             logger.error("Failed to execute router: " + getUrl() + ", cause: " + t.getMessage(), t);
@@ -214,6 +247,7 @@ public abstract class DynamicDirectory<T> extends AbstractDirectory<T> implement
     }
 
     public void buildRouterChain(URL url) {
+        // 构建一条 RouterChain 路由器链路，默认会有这几个 MockInvokersSelector、TagRouter、AppRouter、ServiceRouter
         this.setRouterChain(RouterChain.buildChain(url));
     }
 

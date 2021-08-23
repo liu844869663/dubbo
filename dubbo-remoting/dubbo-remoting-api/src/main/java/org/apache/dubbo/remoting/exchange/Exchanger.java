@@ -24,6 +24,8 @@ import org.apache.dubbo.remoting.RemotingException;
 import org.apache.dubbo.remoting.exchange.support.header.HeaderExchanger;
 
 /**
+ * 数据交换者接口
+ * <p>
  * Exchanger. (SPI, Singleton, ThreadSafe)
  * <p>
  * <a href="http://en.wikipedia.org/wiki/Message_Exchange_Pattern">Message Exchange Pattern</a>
@@ -33,21 +35,25 @@ import org.apache.dubbo.remoting.exchange.support.header.HeaderExchanger;
 public interface Exchanger {
 
     /**
+     * 绑定一个服务器
+     * <p>
      * bind.
      *
-     * @param url
-     * @param handler
-     * @return message server
+     * @param url     服务提供者 URL
+     * @param handler 数据交换处理器
+     * @return message server 服务器
      */
     @Adaptive({Constants.EXCHANGER_KEY})
     ExchangeServer bind(URL url, ExchangeHandler handler) throws RemotingException;
 
     /**
+     * 连接一个服务器，即创建一个客户端
+     * <p>
      * connect.
      *
-     * @param url
-     * @param handler
-     * @return message channel
+     * @param url     服务消费者 URL
+     * @param handler 数据交换处理器
+     * @return message channel 客户端
      */
     @Adaptive({Constants.EXCHANGER_KEY})
     ExchangeClient connect(URL url, ExchangeHandler handler) throws RemotingException;

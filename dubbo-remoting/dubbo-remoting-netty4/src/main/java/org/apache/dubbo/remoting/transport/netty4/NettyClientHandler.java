@@ -39,8 +39,14 @@ import static org.apache.dubbo.common.constants.CommonConstants.HEARTBEAT_EVENT;
 public class NettyClientHandler extends ChannelDuplexHandler {
     private static final Logger logger = LoggerFactory.getLogger(NettyClientHandler.class);
 
+    /**
+     * Dubbo 服务(消费者)的 URL 对象
+     */
     private final URL url;
 
+    /**
+     * 通道处理对象
+     */
     private final ChannelHandler handler;
 
     public NettyClientHandler(URL url, ChannelHandler handler) {
@@ -54,21 +60,30 @@ public class NettyClientHandler extends ChannelDuplexHandler {
         this.handler = handler;
     }
 
+    // 接收到连接
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
+        // 从缓存中获取这个 netty channel 对应的 dubbo channel（NettyChannel）对象
+        // 也就是将 netty channel、url、handler 封装成 NettyChannel 对象
         NettyChannel channel = NettyChannel.getOrAddChannel(ctx.channel(), url, handler);
+        // 连接处理
         handler.connected(channel);
         if (logger.isInfoEnabled()) {
             logger.info("The connection of " + channel.getLocalAddress() + " -> " + channel.getRemoteAddress() + " is established.");
         }
     }
 
+    // 连接断开
     @Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+        // 从缓存中获取这个 netty channel 对应的 dubbo channel（NettyChannel）对象
+        // 也就是将 netty channel、url、handler 封装成 NettyChannel 对象
         NettyChannel channel = NettyChannel.getOrAddChannel(ctx.channel(), url, handler);
         try {
+            // 连接断开处理
             handler.disconnected(channel);
         } finally {
+            // 从 NettyChannel 缓存中移除
             NettyChannel.removeChannel(ctx.channel());
         }
 
@@ -77,16 +92,25 @@ public class NettyClientHandler extends ChannelDuplexHandler {
         }
     }
 
+    // 接收到消息
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+        // 从缓存中获取这个 netty channel 对应的 dubbo channel（NettyChannel）对象
+        // 也就是将 netty channel、url、handler 封装成 NettyChannel 对象
         NettyChannel channel = NettyChannel.getOrAddChannel(ctx.channel(), url, handler);
+        // 处理接收到的消息
         handler.received(channel, msg);
     }
 
+    // 写入数据
     @Override
     public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
+        // 往 `ctx` 中写入数据
         super.write(ctx, msg, promise);
+        // 从缓存中获取这个 netty channel 对应的 dubbo channel（NettyChannel）对象
+        // 也就是将 netty channel、url、handler 封装成 NettyChannel 对象
         final NettyChannel channel = NettyChannel.getOrAddChannel(ctx.channel(), url, handler);
+        // 是否是请求消息
         final boolean isRequest = msg instanceof Request;
 
         // We add listeners to make sure our out bound event is correct.
@@ -95,6 +119,7 @@ public class NettyClientHandler extends ChannelDuplexHandler {
         promise.addListener(future -> {
             if (future.isSuccess()) {
                 // if our future is success, mark the future to sent.
+                // 向通道发送消息
                 handler.sent(channel, msg);
                 return;
             }
@@ -102,41 +127,50 @@ public class NettyClientHandler extends ChannelDuplexHandler {
             Throwable t = future.cause();
             if (t != null && isRequest) {
                 Request request = (Request) msg;
+                // 构建一个错误响应
                 Response response = buildErrorResponse(request, t);
+                // 处理这个错误响应
                 handler.received(channel, response);
             }
         });
     }
 
+    // 事件触发
     @Override
     public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
         // send heartbeat when read idle.
-        if (evt instanceof IdleStateEvent) {
+        if (evt instanceof IdleStateEvent) { // 长时间空闲
             try {
                 NettyChannel channel = NettyChannel.getOrAddChannel(ctx.channel(), url, handler);
                 if (logger.isDebugEnabled()) {
                     logger.debug("IdleStateEvent triggered, send heartbeat to channel " + channel);
                 }
+                // 发送心跳时间
                 Request req = new Request();
                 req.setVersion(Version.getProtocolVersion());
                 req.setTwoWay(true);
                 req.setEvent(HEARTBEAT_EVENT);
                 channel.send(req);
             } finally {
+                // 如果 netty 断开连接，则从 NettyChannel 移除缓存，将 dubbo channel 标记为无效
                 NettyChannel.removeChannelIfDisconnected(ctx.channel());
             }
         } else {
+            // 否则，交由父类处理该事件
             super.userEventTriggered(ctx, evt);
         }
     }
 
+    // 异常处理
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause)
             throws Exception {
         NettyChannel channel = NettyChannel.getOrAddChannel(ctx.channel(), url, handler);
         try {
+            // 处理异常
             handler.caught(channel, cause);
         } finally {
+            // 如果 netty 断开连接，则从 NettyChannel 移除缓存，将 dubbo channel 标记为无效
             NettyChannel.removeChannelIfDisconnected(ctx.channel());
         }
     }

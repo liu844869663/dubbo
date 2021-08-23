@@ -46,13 +46,31 @@ public abstract class AbstractDirectory<T> implements Directory<T> {
     // logger
     private static final Logger logger = LoggerFactory.getLogger(AbstractDirectory.class);
 
+    /**
+     * 注册中心 URL 对象
+     */
     private final URL url;
 
+    /**
+     * 是否被销毁
+     */
     private volatile boolean destroyed = false;
 
+    /**
+     * 服务消费方信息，例如 `consumer://消费者主机IP/org.apache.dubbo.demo.service.StudyService?application=springboot-demo-consumer&dubbo=2.0.2&init=false
+     * &interface=org.apache.dubbo.demo.service.StudyService&metadata-type=remote&methods=researchSpring,researchDubbo&pid=8432
+     * &qos.enable=false&qos.port=0&release=2.7.8&revision=2.0.0&side=consumer&sticky=false&timestamp=1627286764932&version=2.0.0
+     * &category=providers,configurators,routers`
+     */
     protected volatile URL consumerUrl;
 
+    /**
+     * 消费者参数
+     */
     protected final Map<String, String> queryMap; // Initialization at construction time, assertion not null
+    /**
+     * 消费者协议，默认为 dubbo
+     */
     protected final String consumedProtocol;
 
     protected RouterChain<T> routerChain;
@@ -70,19 +88,25 @@ public abstract class AbstractDirectory<T> implements Directory<T> {
             throw new IllegalArgumentException("url == null");
         }
 
+        // 获取这个 URL（注册中心）中的 `refer` 参数，也就是消费者 URL 信息
         this.queryMap = StringUtils.parseQueryString(url.getParameterAndDecoded(REFER_KEY));
+        // 消费者协议，默认都是 `dubbo`
         this.consumedProtocol = this.queryMap.get(PROTOCOL_KEY) == null ? DUBBO : this.queryMap.get(PROTOCOL_KEY);
+        // 移除 `refer` 和 `monitor` 参数，也就剩下注册中心 URL 信息了
         this.url = url.removeParameter(REFER_KEY).removeParameter(MONITOR_KEY);
 
         String path = queryMap.get(PATH_KEY);
+        // 设置消费者协议，和路径（接口名称）
         URL consumerUrlFrom = this.url.setProtocol(consumedProtocol)
                 .setPath(path == null ? queryMap.get(INTERFACE_KEY) : path);
         if (isUrlFromRegistry) {
             // reserve parameters if url is already a consumer url
             consumerUrlFrom = consumerUrlFrom.clearParameters();
         }
+        // 创建一个消费者 URL 对象
         this.consumerUrl = consumerUrlFrom.addParameters(queryMap).removeParameter(MONITOR_KEY);
 
+        // 设置路由器
         setRouterChain(routerChain);
     }
 

@@ -36,7 +36,10 @@ import java.util.concurrent.ThreadFactory;
 public class NettyEventLoopFactory {
     public static EventLoopGroup eventLoopGroup(int threads, String threadFactoryName) {
         ThreadFactory threadFactory = new DefaultThreadFactory(threadFactoryName, true);
-        return shouldEpoll() ? new EpollEventLoopGroup(threads, threadFactory) :
+        return shouldEpoll() ? // 默认没有开启 epoll
+                // Linux 中的多路复用，必须是 linux 环境且支持 eopll
+                new EpollEventLoopGroup(threads, threadFactory) :
+                // nio
                 new NioEventLoopGroup(threads, threadFactory);
     }
 

@@ -64,6 +64,8 @@ public abstract class AbstractConfig implements Serializable {
 
     /**
      * The suffix container
+     *
+     * 配置类名的后缀
      */
     private static final String[] SUFFIXES = new String[]{"Config", "Bean", "ConfigBase"};
 
@@ -102,7 +104,15 @@ public abstract class AbstractConfig implements Serializable {
         return value;
     }
 
+    /**
+     * 获取配置类的标签
+     *
+     * @param cls 配置类 Class 对象
+     * @return 配置类标签
+     */
     public static String getTagName(Class<?> cls) {
+        // 获取配置类的标签
+        // 例如 ConsumerConfig 得到的就是 Consumer，ProviderConfig 得到的就是 Provider
         String tag = cls.getSimpleName();
         for (String suffix : SUFFIXES) {
             if (tag.endsWith(suffix)) {
@@ -110,6 +120,7 @@ public abstract class AbstractConfig implements Serializable {
                 break;
             }
         }
+        // 将 Consumer 或者 Provider 小写
         return StringUtils.camelToSplitName(tag, "-");
     }
 
@@ -122,22 +133,30 @@ public abstract class AbstractConfig implements Serializable {
         if (config == null) {
             return;
         }
+        // 获取这个 XxxConfig 配置类的所有方法，然后遍历处理
         Method[] methods = config.getClass().getMethods();
+        // 遍历这些方法，目的就是找到需要添加的 parameter，可以通过 `@Parameter` 注解配置
         for (Method method : methods) {
             try {
                 String name = method.getName();
+                // 如果是 getXxx() 方法
                 if (MethodUtils.isGetter(method)) {
+                    // 获取 `@Parameter` 注解
                     Parameter parameter = method.getAnnotation(Parameter.class);
+                    // 如果返回类型为 Object 或者没有 `@Parameter` 注解，或者该注解指定了 excluded 为 true，则直接跳过
                     if (method.getReturnType() == Object.class || parameter != null && parameter.excluded()) {
                         continue;
                     }
+                    // 获取这个属性值，优先从 `@Parameter` 注解指定的 key 获取，没有的话从方法名获取
                     String key;
                     if (parameter != null && parameter.key().length() > 0) {
                         key = parameter.key();
                     } else {
                         key = calculatePropertyFromGetter(name);
                     }
+                    // 执行这个 getXxx() 方法，获取返回值
                     Object value = method.invoke(config);
+                    // 将属性值转换成字符串
                     String str = String.valueOf(value).trim();
                     if (value != null && str.length() > 0) {
                         if (parameter != null && parameter.escaped()) {
@@ -152,11 +171,13 @@ public abstract class AbstractConfig implements Serializable {
                         if (prefix != null && prefix.length() > 0) {
                             key = prefix + "." + key;
                         }
+                        // 将这个属性的键值对保存起来
                         parameters.put(key, str);
                     } else if (parameter != null && parameter.required()) {
                         throw new IllegalStateException(config.getClass().getSimpleName() + "." + key + " == null");
                     }
-                } else if (isParametersGetter(method)) {
+                } else if (isParametersGetter(method)) { // 否则，如果是 Map getParameters() 方法
+                    // 则调用该方法，获取需要添加的参数
                     Map<String, String> map = (Map<String, String>) method.invoke(config, new Object[0]);
                     parameters.putAll(convert(map, prefix));
                 }
@@ -589,6 +610,7 @@ public abstract class AbstractConfig implements Serializable {
      */
     @PostConstruct
     public void addIntoConfigManager() {
+        // 将当前配置类添加至 ConfigManager 配置管理器中
         ApplicationModel.getConfigManager().addConfig(this);
     }
 

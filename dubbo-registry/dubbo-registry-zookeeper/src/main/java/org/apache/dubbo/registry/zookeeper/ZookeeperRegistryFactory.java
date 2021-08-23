@@ -22,15 +22,22 @@ import org.apache.dubbo.registry.support.AbstractRegistryFactory;
 import org.apache.dubbo.remoting.zookeeper.ZookeeperTransporter;
 
 /**
+ * zk 注册中心工厂
+ * <p>
  * ZookeeperRegistryFactory.
- *
  */
 public class ZookeeperRegistryFactory extends AbstractRegistryFactory {
 
+    /**
+     * ZookeeperTransporter 扩展点自适应对象，用于创建 zk 客户端
+     *
+     * @see org.apache.dubbo.remoting.zookeeper.ZookeeperTransporter$Adaptive
+     */
     private ZookeeperTransporter zookeeperTransporter;
 
     /**
      * Invisible injection of zookeeper client via IOC/SPI
+     *
      * @param zookeeperTransporter
      */
     public void setZookeeperTransporter(ZookeeperTransporter zookeeperTransporter) {

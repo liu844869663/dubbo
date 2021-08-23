@@ -46,19 +46,31 @@ public class DubboConfigConfigurationRegistrar implements ImportBeanDefinitionRe
     @Override
     public void registerBeanDefinitions(AnnotationMetadata importingClassMetadata, BeanDefinitionRegistry registry) {
 
+        // 获取 `@EnableDubboConfig` 注解的信息
         AnnotationAttributes attributes = AnnotationAttributes.fromMap(
                 importingClassMetadata.getAnnotationAttributes(EnableDubboConfig.class.getName()));
 
+        // 获取注解的 multiple 属性，默认为 true
         boolean multiple = attributes.getBoolean("multiple");
 
         // Single Config Bindings
+        // 先注册一个 DubboConfigConfiguration.Single 对象
         registerBeans(registry, DubboConfigConfiguration.Single.class);
 
         if (multiple) { // Since 2.6.6 https://github.com/apache/dubbo/issues/3193
+            // 如果开启 multiple，则再注册一个 DubboConfigConfiguration.Multiple 对象
             registerBeans(registry, DubboConfigConfiguration.Multiple.class);
         }
+        // 上面的 Single 和 Multiple 都是借助于 `@EnableConfigurationBeanBinding` 注解将 Spring 中 dubbo 开头的配置解析成对应的 Dubbo 配置类（AbstractConfig）
+        // 例如 dubbo.application 开头的配置设置到一个 ApplicationConfig 配置类中
+        // dubbo.registry 开头的配置会设置到一个 RegistryConfig 配置类中
+        // 目的就是将这些 Dubbo 相关的配置解析成对应的 Dubbo 配置类
+        // Multiple 相比 Single 的区别在于它支持配置多个，例如 `dubbo.registries.a.address=注册中心A` 和 `dubbo.registries.b.address=注册中心B` 配置了两个注册中心
+        // 那么在使用 `@DubboService` 注解的时候，可以通过其 `registry=a` 来指定使用注册中心A
 
         // Since 2.7.6
+        // 注册几个公共的工具 Bean
+        // 例如 ReferenceAnnotationBeanPostProcessor，用于处理 `@DubboReference` `@Reference` 标注的字段，解析出 ReferenceBean 注入对应的 Bean
         registerCommonBeans(registry);
     }
 

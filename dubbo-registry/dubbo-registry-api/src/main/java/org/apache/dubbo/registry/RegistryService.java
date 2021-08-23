@@ -21,6 +21,8 @@ import org.apache.dubbo.common.URL;
 import java.util.List;
 
 /**
+ * 注册中心服务接口
+ * <p>
  * RegistryService. (SPI, Prototype, ThreadSafe)
  *
  * @see org.apache.dubbo.registry.Registry
@@ -29,6 +31,8 @@ import java.util.List;
 public interface RegistryService {
 
     /**
+     * 注册服务
+     * <p>
      * Register data, such as : provider service, consumer address, route rule, override rule and other data.
      * <p>
      * Registering is required to support the contract:<br>
@@ -38,11 +42,13 @@ public interface RegistryService {
      * 4. When the registry is restarted, network jitter, data can not be lost, including automatically deleting data from the broken line.<br>
      * 5. Allow URLs which have the same URL but different parameters to coexist,they can't cover each other.<br>
      *
-     * @param url  Registration information , is not allowed to be empty, e.g: dubbo://10.20.153.10/org.apache.dubbo.foo.BarService?version=1.0.0&application=kylin
+     * @param url Registration information , is not allowed to be empty, e.g: dubbo://10.20.153.10/org.apache.dubbo.foo.BarService?version=1.0.0&application=kylin
      */
     void register(URL url);
 
     /**
+     * 取消（下线）注册服务
+     * <p>
      * Unregister
      * <p>
      * Unregistering is required to support the contract:<br>
@@ -54,6 +60,9 @@ public interface RegistryService {
     void unregister(URL url);
 
     /**
+     * 订阅服务，设置回调监听器，发生变更时自动推送
+     * {@link URL#getParameter(String)} 方法获取 `category` 对应的键值，例如返回 "providers,routes"，则订阅这个服务下 `/providers` 和 `/routes` 的子节点
+     * <p>
      * Subscribe to eligible registered data and automatically push when the registered data is changed.
      * <p>
      * Subscribing need to support contracts:<br>
@@ -71,6 +80,8 @@ public interface RegistryService {
     void subscribe(URL url, NotifyListener listener);
 
     /**
+     * 取消订阅
+     * <p>
      * Unsubscribe
      * <p>
      * Unsubscribing is required to support the contract:<br>
@@ -83,6 +94,8 @@ public interface RegistryService {
     void unsubscribe(URL url, NotifyListener listener);
 
     /**
+     * 查询符合条件的已注册服务
+     * <p>
      * Query the registered data that matches the conditions. Corresponding to the push mode of the subscription, this is the pull mode and returns only one result.
      *
      * @param url Query condition, is not allowed to be empty, e.g. consumer://10.20.153.10/org.apache.dubbo.foo.BarService?version=1.0.0&application=kylin

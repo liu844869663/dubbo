@@ -49,6 +49,9 @@ public abstract class AbstractConfigurator implements Configurator {
 
     private static final String TILDE = "~";
 
+    /**
+     * 配置规则 URL
+     */
     private final URL configuratorUrl;
 
     public AbstractConfigurator(URL url) {
@@ -74,12 +77,15 @@ public abstract class AbstractConfigurator implements Configurator {
          */
         String apiVersion = configuratorUrl.getParameter(CONFIG_VERSION_KEY);
         if (StringUtils.isNotEmpty(apiVersion)) {
+            // 当前是消费者还是提供者
             String currentSide = url.getParameter(SIDE_KEY);
+            // 配置的是消费者规则，还是提供者的
             String configuratorSide = configuratorUrl.getParameter(SIDE_KEY);
-            if (currentSide.equals(configuratorSide) && CONSUMER.equals(configuratorSide) && 0 == configuratorUrl.getPort()) {
+            if (currentSide.equals(configuratorSide) && CONSUMER.equals(configuratorSide) && 0 == configuratorUrl.getPort()) { // 消费者
+                // 消费者的地址
                 url = configureIfMatch(NetUtils.getLocalHost(), url);
-            } else if (currentSide.equals(configuratorSide) && PROVIDER.equals(configuratorSide) &&
-                    url.getPort() == configuratorUrl.getPort()) {
+            } else if (currentSide.equals(configuratorSide) && PROVIDER.equals(configuratorSide) && url.getPort() == configuratorUrl.getPort()) { // 提供者
+                // 提供者的地址
                 url = configureIfMatch(url.getHost(), url);
             }
         }
@@ -95,21 +101,26 @@ public abstract class AbstractConfigurator implements Configurator {
     @Deprecated
     private URL configureDeprecated(URL url) {
         // If override url has port, means it is a provider address. We want to control a specific provider with this override url, it may take effect on the specific provider instance or on consumers holding this provider instance.
+        // 配置规则，URL 带有端口( port )，意图是控制提供者机器。可以在提供端生效 也可以在消费端生效
         if (configuratorUrl.getPort() != 0) {
             if (url.getPort() == configuratorUrl.getPort()) {
                 return configureIfMatch(url.getHost(), url);
             }
-        } else {
+        } else { // 配置规则，URL 没有端口，override 输入消费端地址 或者 0.0.0.0
             /*
              *  override url don't have a port, means the ip override url specify is a consumer address or 0.0.0.0.
              *  1.If it is a consumer ip address, the intention is to control a specific consumer instance, it must takes effect at the consumer side, any provider received this override url should ignore.
+             *    如果是消费端地址，则意图是控制消费者机器，必定在消费端生效，提供端忽略；
              *  2.If the ip is 0.0.0.0, this override url can be used on consumer, and also can be used on provider.
+             *    如果是0.0.0.0可能是控制提供端，也可能是控制提供端
              */
             if (url.getParameter(SIDE_KEY, PROVIDER).equals(CONSUMER)) {
                 // NetUtils.getLocalHost is the ip address consumer registered to registry.
+                // NetUtils.getLocalHost 是消费端注册到zk的消费者地址
                 return configureIfMatch(NetUtils.getLocalHost(), url);
             } else if (url.getParameter(SIDE_KEY, CONSUMER).equals(PROVIDER)) {
                 // take effect on all providers, so address must be 0.0.0.0, otherwise it won't flow to this if branch
+                // 控制所有提供端，地址必定是0.0.0.0，否则就要配端口从而执行上面的if分支了
                 return configureIfMatch(ANYHOST_VALUE, url);
             }
         }
@@ -117,22 +128,25 @@ public abstract class AbstractConfigurator implements Configurator {
     }
 
     private URL configureIfMatch(String host, URL url) {
+        // 匹配 host
         if (ANYHOST_VALUE.equals(configuratorUrl.getHost()) || host.equals(configuratorUrl.getHost())) {
             // TODO, to support wildcards
             String providers = configuratorUrl.getParameter(OVERRIDE_PROVIDERS_KEY);
             if (StringUtils.isEmpty(providers) || providers.contains(url.getAddress()) || providers.contains(ANYHOST_VALUE)) {
+                // 匹配 application
                 String configApplication = configuratorUrl.getParameter(APPLICATION_KEY,
                         configuratorUrl.getUsername());
                 String currentApplication = url.getParameter(APPLICATION_KEY, url.getUsername());
                 if (configApplication == null || ANY_VALUE.equals(configApplication)
                         || configApplication.equals(currentApplication)) {
-
+                    // 配置规则 URL 中的条件 KEYS 集合
                     Set<String> tildeKeys = new HashSet<>();
                     for (Map.Entry<String, String> entry : configuratorUrl.getParameters().entrySet()) {
                         String key = entry.getKey();
                         String value = entry.getValue();
                         String tildeKey = StringUtils.isNotEmpty(key) && key.startsWith(TILDE) ? key : null;
 
+                        // 判断传入的 url 是否匹配配置规则 URL 的条件。除了 "application" 和 "side" 之外，带有 "~" 开头的 KEY ，也是条件
                         if (tildeKey != null || APPLICATION_KEY.equals(key) || SIDE_KEY.equals(key)) {
                             if (value != null && !ANY_VALUE.equals(value)
                                     && !value.equals(url.getParameter(tildeKey != null ? key.substring(1) : key))) {
@@ -159,6 +173,7 @@ public abstract class AbstractConfigurator implements Configurator {
                     conditionKeys.add(INTERFACES);
                     conditionKeys.addAll(tildeKeys);
 
+                    // 移除条件 KEYS 集合，并配置到 URL 中
                     return doConfigure(url, configuratorUrl.removeParameters(conditionKeys));
                 }
             }

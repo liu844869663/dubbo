@@ -24,11 +24,12 @@ import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.RpcException;
 
 /**
+ * 集群接口
+ * <p>
  * Cluster. (SPI, Singleton, ThreadSafe)
  * <p>
  * <a href="http://en.wikipedia.org/wiki/Computer_cluster">Cluster</a>
  * <a href="http://en.wikipedia.org/wiki/Fault-tolerant_system">Fault-Tolerant</a>
- *
  */
 @SPI(Cluster.DEFAULT)
 public interface Cluster {
@@ -36,6 +37,8 @@ public interface Cluster {
     String DEFAULT = "failover";
 
     /**
+     * 基于 {@link Directory} 创建 Invoker 对象，实现统一、透明的 Invoker 调用过程
+     * <p>
      * Merge the directory invokers to a virtual invoker.
      *
      * @param <T>
@@ -54,6 +57,7 @@ public interface Cluster {
         if (StringUtils.isEmpty(name)) {
             name = Cluster.DEFAULT;
         }
+        // 默认使用 `failover` 失败重试策略
         return ExtensionLoader.getExtensionLoader(Cluster.class).getExtension(name, wrap);
     }
 }

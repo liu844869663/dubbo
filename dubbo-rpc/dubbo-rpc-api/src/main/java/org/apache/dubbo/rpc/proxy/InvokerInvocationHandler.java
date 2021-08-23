@@ -36,9 +36,18 @@ import java.lang.reflect.Method;
  */
 public class InvokerInvocationHandler implements InvocationHandler {
     private static final Logger logger = LoggerFactory.getLogger(InvokerInvocationHandler.class);
+    /**
+     * Invoker 对象
+     */
     private final Invoker<?> invoker;
     private ConsumerModel consumerModel;
+    /**
+     * 对应的 URL 对象
+     */
     private URL url;
+    /**
+     * 对应的某个协议服务键，例如 `分组名称/服务名称:版本号:协议名称`
+     */
     private String protocolServiceKey;
 
     public static Field stackTraceField;
@@ -64,11 +73,13 @@ public class InvokerInvocationHandler implements InvocationHandler {
 
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+        // 如果是 Object 的方法，则直接通过反射执行这个 `invoker` 对象的方法
         if (method.getDeclaringClass() == Object.class) {
             return method.invoke(invoker, args);
         }
         String methodName = method.getName();
         Class<?>[] parameterTypes = method.getParameterTypes();
+        // 如果是下面几个方法，直接调用这个 `invoker` 对象的方法
         if (parameterTypes.length == 0) {
             if ("toString".equals(methodName)) {
                 return invoker.toString();
@@ -81,11 +92,13 @@ public class InvokerInvocationHandler implements InvocationHandler {
         } else if (parameterTypes.length == 1 && "equals".equals(methodName)) {
             return invoker.equals(args[0]);
         }
+        // 将这个方法、参数封装成一个 RpcInvocation 对象
         RpcInvocation rpcInvocation = new RpcInvocation(method, invoker.getInterface().getName(), protocolServiceKey, args);
         String serviceKey = invoker.getUrl().getServiceKey();
         rpcInvocation.setTargetServiceUniqueName(serviceKey);
 
         // invoker.getUrl() returns consumer url.
+        // 将这个 URL 对象设置到 RpcContext 上下文中
         RpcContext.setRpcContext(invoker.getUrl());
 
         if (consumerModel != null) {
@@ -93,6 +106,8 @@ public class InvokerInvocationHandler implements InvocationHandler {
             rpcInvocation.put(Constants.METHOD_MODEL, consumerModel.getMethodModel(method));
         }
 
+        // 执行这个 Invoker#invoke(Invocation) 方法，执行目标方法，返回了一个 Result 对象
+        // 然后调用其 recreate() 方法，返回执行结果，如果返回的有异常，则抛出异常
         return invoker.invoke(rpcInvocation).recreate();
     }
 }

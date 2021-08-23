@@ -137,10 +137,16 @@ public class DubboBootstrap {
 
     public static final String DEFAULT_CONSUMER_ID = "CONSUMER#DEFAULT";
 
+    /**
+     * DubboBootstrap 名称
+     */
     private static final String NAME = DubboBootstrap.class.getSimpleName();
 
     private final Logger logger = LoggerFactory.getLogger(getClass());
 
+    /**
+     * DubboBootstrap 单例对象
+     */
     private static volatile DubboBootstrap instance;
 
     private final AtomicBoolean awaited = new AtomicBoolean(false);
@@ -149,28 +155,61 @@ public class DubboBootstrap {
 
     private final Condition condition = lock.newCondition();
 
+    /**
+     * 销毁时的可重入锁
+     */
     private final Lock destroyLock = new ReentrantLock();
 
+    /**
+     * 单线程的线程池
+     */
     private final ExecutorService executorService = newSingleThreadExecutor();
 
     private final ExecutorRepository executorRepository = getExtensionLoader(ExecutorRepository.class).getDefaultExtension();
 
+    /**
+     * 配置类管理器
+     */
     private final ConfigManager configManager;
 
+    /**
+     * 环境对象
+     */
     private final Environment environment;
 
+    /**
+     * 缓存消费者已经完成引用服务的配置类
+     */
     private ReferenceConfigCache cache;
 
+    /**
+     * 是否异步暴露服务
+     */
     private volatile boolean exportAsync;
 
+    /**
+     * 是否异步引用服务
+     */
     private volatile boolean referAsync;
 
+    /**
+     * 是否已完成相关初始化工作
+     */
     private AtomicBoolean initialized = new AtomicBoolean(false);
 
+    /**
+     * 是否已启动
+     */
     private AtomicBoolean started = new AtomicBoolean(false);
 
+    /**
+     * 是否已准备就绪
+     */
     private AtomicBoolean ready = new AtomicBoolean(false);
 
+    /**
+     * 销毁状态
+     */
     private AtomicBoolean destroyed = new AtomicBoolean(false);
 
     private volatile ServiceInstance serviceInstance;
@@ -179,10 +218,19 @@ public class DubboBootstrap {
 
     private volatile MetadataServiceExporter metadataServiceExporter;
 
+    /**
+     * 已经暴露的 Dubbo 服务提供者对应的配置类
+     */
     private Map<String, ServiceConfigBase<?>> exportedServices = new ConcurrentHashMap<>();
 
+    /**
+     * 异步暴露 Dubbo 服务提供者的 Future 对象
+     */
     private List<Future<?>> asyncExportingFutures = new ArrayList<>();
 
+    /**
+     * 异步引用 Dubbo 服务的 Future 对象
+     */
     private List<CompletableFuture<Object>> asyncReferringFutures = new ArrayList<>();
 
     /**
@@ -203,7 +251,10 @@ public class DubboBootstrap {
         configManager = ApplicationModel.getConfigManager();
         environment = ApplicationModel.getEnvironment();
 
+        // 向 JVM 注册一个 DubboShutdownHook 钩子函数，当 JVM 关闭时触发这个任务，以实现优雅停机
+        // 提示：kill -9 不会触发
         DubboShutdownHook.getDubboShutdownHook().register();
+        // 添加一个回调，当触发上面的钩子函数时，会执行这个回调，也就是执行当前 `this#destroy()` 销毁方法
         ShutdownHookCallbacks.INSTANCE.addCallback(DubboBootstrap.this::destroy);
     }
 
@@ -512,21 +563,29 @@ public class DubboBootstrap {
      * Initialize
      */
     public void initialize() {
+        // 设置为已完成相关初始化工作，已经初始化则跳过
         if (!initialized.compareAndSet(false, true)) {
             return;
         }
 
+        // 执行所有的 FrameworkExt 框架扩展类的初始化工作
+        // 例如 Environment 初始化会读取配置中心的配置
         ApplicationModel.initFrameworkExts();
 
+        // 启动配置中心
         startConfigCenter();
 
+        // 加载远程的配置
         loadRemoteConfigs();
 
+        // 检查全局配置
         checkGlobalConfigs();
 
         // @since 2.7.8
+        // 启动元数据中心，默认使用注册中心作为元数据中心
         startMetadataCenter();
 
+        // 初始化元数据服务，默认使用 InMemoryWritableMetadataService 内存操作
         initMetadataService();
 
         if (logger.isInfoEnabled()) {
@@ -594,6 +653,7 @@ public class DubboBootstrap {
 
     private void startConfigCenter() {
 
+        // 使用注册中心作为配置中心（如果没有指定配置中心）
         useRegistryAsConfigCenterIfNecessary();
 
         Collection<ConfigCenterConfig> configCenters = configManager.getConfigCenters();
@@ -872,16 +932,28 @@ public class DubboBootstrap {
     }
 
     /**
+     * 在启动之前 Dubbo 应用之前，Spring 应用上下文会有处理器解析所有的 Dubbo 服务并注册，同时会注册一个对应的 AbstractConfig 配置类
+     * 参考 ServiceClassPostProcessor、ReferenceAnnotationBeanPostProcessor 两个处理器和 DubboNamespaceHandler `<dubbo />` 标签处理器
+     *
+     * 在 AbstractConfig#addIntoConfigManager 方法（`@PostConstruct` 标注）中会将这个配置类添加到 ConfigManager 配置管理器
+     * 所以这里可以通过 ConfigManager#configsCache 获取到所有 Dubbo 服务信息
+     *
      * Start the bootstrap
      */
     public DubboBootstrap start() {
+        // Dubbo 引用启动状态由 `false` 修改为 `true`
         if (started.compareAndSet(false, true)) {
+            // 设置还未准备就绪
             ready.set(false);
+            // 进行初始化工作，配置中心和元数据中心
             initialize();
             if (logger.isInfoEnabled()) {
                 logger.info(NAME + " is starting...");
             }
-            // 1. export Dubbo Services
+            /**
+             * 1. 暴露所有的 Dubbo 服务提供者
+             * 也就是调用其 {@link ServiceConfig#export() 方法，这一步做了非常多的工作，例如会创建 Invoker 和 Export 对象，向注册中心注册等等
+             */
             exportServices();
 
             // Not only provider register
@@ -892,26 +964,35 @@ public class DubboBootstrap {
                 registerServiceInstance();
             }
 
+            /**
+             * 引用服务
+             */
             referServices();
+            // 如果存在异步暴露服务
             if (asyncExportingFutures.size() > 0) {
                 new Thread(() -> {
                     try {
+                        // 等待全部完成
                         this.awaitFinish();
                     } catch (Exception e) {
                         logger.warn(NAME + " exportAsync occurred an exception.");
                     }
+                    // 设置准备就绪
                     ready.set(true);
                     if (logger.isInfoEnabled()) {
                         logger.info(NAME + " is ready.");
                     }
+                    // Dubbo SPI 获取 DubboBootstrapStartStopListener 监听器，触发启动事件
                     ExtensionLoader<DubboBootstrapStartStopListener> exts = getExtensionLoader(DubboBootstrapStartStopListener.class);
                     exts.getSupportedExtensionInstances().forEach(ext -> ext.onStart(this));
                 }).start();
             } else {
+                // 设置准备就绪
                 ready.set(true);
                 if (logger.isInfoEnabled()) {
                     logger.info(NAME + " is ready.");
                 }
+                // Dubbo SPI 获取 DubboBootstrapStartStopListener 监听器，触发启动事件
                 ExtensionLoader<DubboBootstrapStartStopListener> exts = getExtensionLoader(DubboBootstrapStartStopListener.class);
                 exts.getSupportedExtensionInstances().forEach(ext -> ext.onStart(this));
             }
@@ -1066,13 +1147,18 @@ public class DubboBootstrap {
     }
 
     private void exportServices() {
+        // 通过配置类管理器获取所有的 Dubbo 服务提供者配置类，也就是所有的 ServiceConfig 配置类
+        // 遍历，依次进行暴露
         configManager.getServices().forEach(sc -> {
             // TODO, compatible with ServiceConfig.export()
             ServiceConfig serviceConfig = (ServiceConfig) sc;
+            // 设置启动器为当前对象
             serviceConfig.setBootstrap(this);
 
-            if (exportAsync) {
+            if (exportAsync) { // 异步暴露，默认没开启
+                // 获取异步暴露服务的线程池
                 ExecutorService executor = executorRepository.getServiceExporterExecutor();
+                // 将暴露这个服务的任务放入线程池中进行
                 Future<?> future = executor.submit(() -> {
                     try {
                         exportService(serviceConfig);
@@ -1080,14 +1166,20 @@ public class DubboBootstrap {
                         logger.error("export async catch error : " + t.getMessage(), t);
                     }
                 });
+                // 异步处理的 Future 结果缓存起来
                 asyncExportingFutures.add(future);
-            } else {
+            } else { // 否则，阻塞暴露
+                /**
+                 * 暴露这个 Dubbo 服务提供者，也就是调用这个 {@link ServiceConfig#export() 方法
+                 * 这一步做了非常多的工作，例如会创建 Invoker 和 Export 对象，向注册中心注册等等
+                 */
                 exportService(serviceConfig);
             }
         });
     }
 
     private void exportService(ServiceConfig sc) {
+        // 如果已经暴露了这个服务，则抛出异常
         if (exportedServices.containsKey(sc.getServiceName())) {
             throw new IllegalStateException("There are multiple ServiceBean instances with the same service name: [" +
                     sc.getServiceName() + "], instances: [" +
@@ -1095,43 +1187,65 @@ public class DubboBootstrap {
                     sc.toString() + "]. Only one service can be exported for the same triple (group, interface, version), " +
                     "please modify the group or version if you really need to export multiple services of the same interface.");
         }
+        // 【关键】暴露服务
         sc.export();
+        // 将这个已暴露的服务放入缓存中
         exportedServices.put(sc.getServiceName(), sc);
     }
 
     private void unexportServices() {
+        // 遍历已经暴露的 Dubbo 服务提供者对应的配置类
         exportedServices.forEach((serviceName, sc) -> {
+            // 从配置管理器中删除
             configManager.removeConfig(sc);
+            // 销毁这个 Dubbo 服务
             sc.unexport();
         });
 
+        // 如果还有正在异步暴露服务的任务，则取消
         asyncExportingFutures.forEach(future -> {
             if (!future.isDone()) {
                 future.cancel(true);
             }
         });
+        // 清理资源
         asyncExportingFutures.clear();
         exportedServices.clear();
     }
 
     private void referServices() {
+        // 获取引用服务配置类的缓存对象
         if (cache == null) {
             cache = ReferenceConfigCache.getCache();
         }
 
+        /**
+         * 通过配置类管理器获取所有的服务消费者的配置类，也就是所有的 ReferenceConfig 配置类，遍历，依次进行引用
+         * 参考 ReferenceAnnotationBeanPostProcessor，有些通过 `@DubboReference` 注解标注的服务已经完成引用了，在 ConfigManager 中不会有缓存
+         *
+         * 通过 `<dubbo:reference />` 标签引用的服务的配置类会添加至 ConfigManager 缓存中
+         * 参考它的 `init` 配置（默认 false），是否在 ReferenceBean#afterPropertiesSet() 时饥饿初始化引用，否则等到有人注入或引用该实例时再初始化
+         * 所以说，一般在注入这个对象的时候已经初始化，完成引用了
+         */
         configManager.getReferences().forEach(rc -> {
             // TODO, compatible with  ReferenceConfig.refer()
             ReferenceConfig referenceConfig = (ReferenceConfig) rc;
+            // 设置启动器为当前对象
             referenceConfig.setBootstrap(this);
 
+            // 应该初始化，也就是配置了 `init=true`，默认不需要
             if (rc.shouldInit()) {
-                if (referAsync) {
+                if (referAsync) { // 异步处理
                     CompletableFuture<Object> future = ScheduledCompletableFuture.submit(
                             executorRepository.getServiceExporterExecutor(),
                             () -> cache.get(rc)
                     );
                     asyncReferringFutures.add(future);
                 } else {
+                    /**
+                     * 引用服务，也就是调用 {@link ReferenceConfig#get()} 方法
+                     * 这一步做了非常多的工作，例如创建 Invoker 对象，动态代理对象，向注册中心订阅等等
+                     */
                     cache.get(rc);
                 }
             }
@@ -1139,16 +1253,20 @@ public class DubboBootstrap {
     }
 
     private void unreferServices() {
+        // 获取引用服务配置类的缓存对象
         if (cache == null) {
             cache = ReferenceConfigCache.getCache();
         }
 
+        // 如果还有未完成的异步引用服务任务，则取消
         asyncReferringFutures.forEach(future -> {
             if (!future.isDone()) {
                 future.cancel(true);
             }
         });
+        // 清理资源
         asyncReferringFutures.clear();
+        // 销毁缓存中所有的引用服务，例如销毁动态代理对象
         cache.destroyAll();
     }
 
@@ -1256,29 +1374,43 @@ public class DubboBootstrap {
     }
 
     public void destroy() {
+        // 加锁
         if (destroyLock.tryLock()) {
             try {
+                // 将启动状态由 true 改为 false
                 if (started.compareAndSet(true, false)
+                        // 将销毁状态由 false 改为 true
                         && destroyed.compareAndSet(false, true)) {
 
                     unregisterServiceInstance();
                     unexportMetadataService();
+                    // 将已经暴露的服务进行下线
                     unexportServices();
+                    // 销毁缓存中的引用的服务的代理对象
                     unreferServices();
 
+                    // 销毁所有注册中心，例如关闭 zk 客户端，取消所有订阅
                     destroyRegistries();
 
+                    // 关闭所有 ServiceDiscoveryRegistry 类型的注册中心实例对象
                     destroyServiceDiscoveries();
+                    // 销毁所有线程池
                     destroyExecutorRepository();
+                    // 清理资源
                     clear();
+                    // 关闭当前对象中的单线程线程池
                     shutdown();
+                    // 释放锁，唤醒正在等待的 DubboBootstrap 对象，疑惑？？让主线程继续？
                     release();
+                    // Dubbo SPI 获取 DubboBootstrapStartStopListener 监听器，触发停止事件
                     ExtensionLoader<DubboBootstrapStartStopListener> exts = getExtensionLoader(DubboBootstrapStartStopListener.class);
                     exts.getSupportedExtensionInstances().forEach(ext -> ext.onStop(this));
                 }
 
+                // 销毁所有注册中心（上面已经销毁了就不再进行操作）和 Protocol 协议
                 DubboShutdownHook.destroyAll();
             } finally {
+                // 释放锁
                 destroyLock.unlock();
             }
         }
@@ -1302,6 +1434,7 @@ public class DubboBootstrap {
     }
 
     private void clear() {
+        // 清理 ConfigManager 配置管理器中的所有配置类
         clearConfigs();
         clearApplicationModel();
     }

@@ -65,21 +65,39 @@ public class AccessLogFilter implements Filter {
 
     private static final Logger logger = LoggerFactory.getLogger(AccessLogFilter.class);
 
+    /**
+     * 访问日志在 {@link LoggerFactory} 中的日志名
+     */
     private static final String LOG_KEY = "dubbo.accesslog";
 
     private static final String LINE_SEPARATOR = "line.separator";
 
+    /**
+     * 队列大小，即 {@link #log} 值的大小
+     */
     private static final int LOG_MAX_BUFFER = 5000;
 
+    /**
+     * 日志输出频率，单位：毫秒
+     */
     private static final long LOG_OUTPUT_INTERVAL = 5000;
 
+    /**
+     * 访问日志的文件后缀
+     */
     private static final String FILE_DATE_FORMAT = "yyyyMMdd";
 
     // It's safe to declare it as singleton since it runs on single thread only
     private static final DateFormat FILE_NAME_FORMATTER = new SimpleDateFormat(FILE_DATE_FORMAT);
 
+    /**
+     * 日志队列
+     */
     private static final Map<String, Queue<AccessLogData>> LOG_ENTRIES = new ConcurrentHashMap<>();
 
+    /**
+     * 定时任务线程池
+     */
     private static final ScheduledExecutorService LOG_SCHEDULED = Executors.newSingleThreadScheduledExecutor(new NamedThreadFactory("Dubbo-Access-Log", true));
 
     /**
@@ -101,10 +119,14 @@ public class AccessLogFilter implements Filter {
     @Override
     public Result invoke(Invoker<?> invoker, Invocation inv) throws RpcException {
         try {
+            // 记录访问日志的文件名
             String accessLogKey = invoker.getUrl().getParameter(ACCESS_LOG_KEY);
             if (ConfigUtils.isNotEmpty(accessLogKey)) {
-                AccessLogData logData = AccessLogData.newLogData(); 
+                // 创建一个 AccessLogData 对象
+                AccessLogData logData = AccessLogData.newLogData();
+                // 设置相关信息，例如服务名称、方法名、版本号、参数等信息
                 logData.buildAccessLogData(invoker, inv);
+                // 写入日志文件
                 log(accessLogKey, logData);
             }
         } catch (Throwable t) {

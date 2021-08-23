@@ -27,6 +27,10 @@ import org.apache.dubbo.registry.support.AbstractRegistryFactory;
 import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.cluster.Cluster;
 import org.apache.dubbo.rpc.cluster.ClusterInvoker;
+import org.apache.dubbo.rpc.cluster.interceptor.ConsumerContextClusterInterceptor;
+import org.apache.dubbo.rpc.cluster.interceptor.ZoneAwareClusterInterceptor;
+import org.apache.dubbo.rpc.cluster.support.FailoverClusterInvoker;
+import org.apache.dubbo.rpc.cluster.support.wrapper.MockClusterInvoker;
 
 import static org.apache.dubbo.common.constants.RegistryConstants.REGISTRY_KEY;
 import static org.apache.dubbo.common.constants.RegistryConstants.REGISTRY_PROTOCOL;
@@ -66,6 +70,10 @@ public class InterfaceCompatibleRegistryProtocol extends RegistryProtocol {
     @Override
     public <T> ClusterInvoker<T> getServiceDiscoveryInvoker(Cluster cluster, Registry registry, Class<T> type, URL url) {
         try {
+            /**
+             * 获取 Registry 注册中心对象
+             * 可参考 {@link RegistryProtocol#getRegistry(URL)} 方法
+             */
             registry = registryFactory.getRegistry(super.getRegistryUrl(url));
         } catch (IllegalStateException e) {
             String protocol = url.getProtocol();
@@ -73,7 +81,18 @@ public class InterfaceCompatibleRegistryProtocol extends RegistryProtocol {
             registry = AbstractRegistryFactory.getDefaultNopRegistryIfNotSupportServiceDiscovery();
         }
 
+        // 创建一个 ServiceDiscoveryRegistryDirectory 对象
         DynamicDirectory<T> directory = new ServiceDiscoveryRegistryDirectory<>(type, url);
+        /**
+         * 1. 对这个 `directory` 进行相关配置，向注册中心订阅服务提供者信息，监听着它们的变化，动态维护着一些 PRC Invoker 对象
+         * 2. 借助 Cluster 对象将这个 `directory` 封装成一个 Invoker 对象，例如 {@link FailoverClusterInvoker}
+         * 3. 构建一条 Invoker 链，在其前面添加一系列 ClusterInterceptor 拦截器
+         *    默认会有 {@link ConsumerContextClusterInterceptor} 拦截器
+         *    `cluster=zone-aware` 会有 {@link ZoneAwareClusterInterceptor} 拦截器
+         * 4. 将这个 Invoker 对象封装成 {@link MockClusterInvoker} 对象
+         *
+         * 总结：将一系列服务提供者的 PRC Invoker 封装成一个 Invoker 对象
+         */
         return doCreateInvoker(directory, cluster, registry, type);
     }
 

@@ -71,6 +71,11 @@ public class ConfigManager extends LifecycleAdapter implements FrameworkExt {
 
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
 
+    /**
+     * 缓存所有的配置类
+     * key：配置类的标签，例如 ConsumerConfig -> consumer，ProviderConfig -> provider
+     * value：<配置类的id, 配置类>
+     */
     final Map<String, Map<String, AbstractConfig>> configsCache = newMap();
 
     public ConfigManager() {
@@ -318,6 +323,11 @@ public class ConfigManager extends LifecycleAdapter implements FrameworkExt {
         serviceConfigs.forEach(this::addService);
     }
 
+    /**
+     * 获取所有的服务提供者的配置类列表
+     *
+     * @return 服务提供者的配置类列表
+     */
     public Collection<ServiceConfigBase> getServices() {
         return getConfigs(getTagName(ServiceConfigBase.class));
     }
@@ -336,6 +346,11 @@ public class ConfigManager extends LifecycleAdapter implements FrameworkExt {
         referenceConfigs.forEach(this::addReference);
     }
 
+    /**
+     * 获取所有的服务消费者引用服务的配置类列表
+     *
+     * @return 服务消费者引用服务的配置类列表
+     */
     public Collection<ReferenceConfigBase<?>> getReferences() {
         return getConfigs(getTagName(ReferenceConfigBase.class));
     }

@@ -49,9 +49,13 @@ public class RouterChain<T> {
     }
 
     private RouterChain(URL url) {
+        // Dubbo 获取 RouterFactory 扩展点实现类
+        // 默认有 MockRouterFactory、TagRouterFactory、AppRouterFactory、ServiceRouterFactory
         List<RouterFactory> extensionFactories = ExtensionLoader.getExtensionLoader(RouterFactory.class)
                 .getActivateExtension(url, ROUTER_KEY);
 
+        // 创建对应的 Router 对象
+        // MockInvokersSelector、TagRouter、AppRouter、ServiceRouter
         List<Router> routers = extensionFactories.stream()
                 .map(factory -> factory.getRouter(url))
                 .collect(Collectors.toList());

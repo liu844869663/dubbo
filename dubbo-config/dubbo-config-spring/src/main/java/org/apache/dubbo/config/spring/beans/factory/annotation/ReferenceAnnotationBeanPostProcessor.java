@@ -141,25 +141,35 @@ public class ReferenceAnnotationBeanPostProcessor extends AbstractAnnotationBean
         /**
          * The name of bean that annotated Dubbo's {@link Service @Service} in local Spring {@link ApplicationContext}
          */
+        // 生成这个被引用的服务提供者的名称，例如 `ServiceBean:org.apache.dubbo.demo.service.StudyService:2.0.0`
+        // 这个名称也就是服务提供者注册时的名称，例如通过 `@DubboService(version = "2.0.0")` 注解配置
         String referencedBeanName = buildReferencedBeanName(attributes, injectedType);
 
         /**
          * The name of bean that is declared by {@link Reference @Reference} annotation injection
          */
+        // 生成消费者中引用服务提供者的名称，例如 `@Reference(version=2.0.0) org.apache.dubbo.demo.service.StudyService`
         String referenceBeanName = getReferenceBeanName(attributes, injectedType);
 
+        // 缓存这个服务提供者被消费者使用的信息，用于打印日志
         referencedBeanNameIdx.computeIfAbsent(referencedBeanName, k -> new TreeSet<String>()).add(referenceBeanName);
 
+        // 创建一个 ReferenceBean 引用对象（有缓存）
         ReferenceBean referenceBean = buildReferenceBeanIfAbsent(referenceBeanName, attributes, injectedType);
 
+        // 服务提供者是否就是当前 Spring 应用内的对象，且没有配置 `injvm=false`
         boolean localServiceBean = isLocalServiceBean(referencedBeanName, referenceBean, attributes);
 
+        // 为这个 ReferenceBean 引用对象做一些准备工作，如果是本地引用，则将其设置为 injvm，并尝试暴露这个服务提供者（因为此时可能还没有暴露）
         prepareReferenceBean(referencedBeanName, referenceBean, localServiceBean);
 
+        // 往 Spring 应用上下文注册这个引用的 Bean（无须初始化），分本地和远程两种情况
         registerReferenceBean(referencedBeanName, referenceBean, localServiceBean, referenceBeanName);
 
+        // 缓存这个 ReferenceBean
         cacheInjectedReferenceBean(referenceBean, injectedElement);
 
+        // 调用这个 ReferenceBean 的 get() 方法，为这个服务者创建一个动态代理对象，并调用所有 BeanPostProcessor 对其进行初始化后置处理，然后返回
         return getBeanFactory().applyBeanPostProcessorsAfterInitialization(referenceBean.get(), referenceBeanName);
     }
 
@@ -178,18 +188,24 @@ public class ReferenceAnnotationBeanPostProcessor extends AbstractAnnotationBean
 
         ConfigurableListableBeanFactory beanFactory = getBeanFactory();
 
+        // 如果是本地引用
         if (localServiceBean) {  // If @Service bean is local one
             /**
              * Get  the @Service's BeanDefinition from {@link BeanFactory}
              * Refer to {@link ServiceClassPostProcessor#buildServiceBeanDefinition}
              */
+            // 从当前 Spring 应用上下文获取服务提供者这个 Bean（接口）
             AbstractBeanDefinition beanDefinition = (AbstractBeanDefinition) beanFactory.getBeanDefinition(referencedBeanName);
+            // 获取这个服务提供者具体的实现类
             RuntimeBeanReference runtimeBeanReference = (RuntimeBeanReference) beanDefinition.getPropertyValues().get("ref");
             // The name of bean annotated @Service
             String serviceBeanName = runtimeBeanReference.getBeanName();
             // register Alias rather than a new bean name, in order to reduce duplicated beans
+            // 为这个服务提供者具体的实现类注册一个别名
             beanFactory.registerAlias(serviceBeanName, beanName);
+        // 否则，远程引用
         } else { // Remote @Service Bean
+            // 如果不包含这个服务提供者，则进行注册
             if (!beanFactory.containsBean(beanName)) {
                 beanFactory.registerSingleton(beanName, referenceBean);
             }
@@ -289,7 +305,8 @@ public class ReferenceAnnotationBeanPostProcessor extends AbstractAnnotationBean
      * @since 2.7.6
      */
     private boolean isLocalServiceBean(String referencedBeanName, ReferenceBean referenceBean, AnnotationAttributes attributes) {
-        return existsServiceBean(referencedBeanName) && !isRemoteReferenceBean(referenceBean, attributes);
+        return existsServiceBean(referencedBeanName) // 当前 Spring 引用上下文存在这个 referencedBeanName 服务提供者
+                && !isRemoteReferenceBean(referenceBean, attributes); // 没有配置 injvm=false
     }
 
     /**

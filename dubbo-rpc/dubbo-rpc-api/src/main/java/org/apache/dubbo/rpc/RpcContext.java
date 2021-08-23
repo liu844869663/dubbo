@@ -57,6 +57,8 @@ import static org.apache.dubbo.rpc.Constants.RETURN_KEY;
 public class RpcContext {
 
     /**
+     * 线程变量
+     * <p>
      * use internal thread local to improve performance
      */
     // FIXME REQUEST_CONTEXT
@@ -67,6 +69,7 @@ public class RpcContext {
         }
     };
 
+    // 服务端线程变量
     // FIXME RESPONSE_CONTEXT
     private static final InternalThreadLocal<RpcContext> SERVER_LOCAL = new InternalThreadLocal<RpcContext>() {
         @Override
@@ -75,21 +78,45 @@ public class RpcContext {
         }
     };
 
+    /**
+     * 隐式参数集合
+     */
     protected final Map<String, Object> attachments = new HashMap<>();
     private final Map<String, Object> values = new HashMap<String, Object>();
 
+    /**
+     * 可调用服务的 URL 对象集合
+     */
     private List<URL> urls;
 
+    /**
+     * 调用服务的 URL 对象
+     */
     private URL url;
 
+    /**
+     * 方法名
+     */
     private String methodName;
 
+    /**
+     * 参数类型数组
+     */
     private Class<?>[] parameterTypes;
 
+    /**
+     * 参数值数组
+     */
     private Object[] arguments;
 
+    /**
+     * 服务消费者地址
+     */
     private InetSocketAddress localAddress;
 
+    /**
+     * 服务提供者地址
+     */
     private InetSocketAddress remoteAddress;
 
     private String remoteApplicationName;

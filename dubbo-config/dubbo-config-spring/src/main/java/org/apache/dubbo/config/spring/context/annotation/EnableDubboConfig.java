@@ -23,8 +23,15 @@ import org.apache.dubbo.config.MonitorConfig;
 import org.apache.dubbo.config.ProtocolConfig;
 import org.apache.dubbo.config.ProviderConfig;
 import org.apache.dubbo.config.RegistryConfig;
+import org.apache.dubbo.config.AbstractConfig;
 
 import com.alibaba.spring.beans.factory.annotation.EnableConfigurationBeanBinding;
+import org.apache.dubbo.config.annotation.DubboReference;
+import org.apache.dubbo.config.annotation.Reference;
+import org.apache.dubbo.config.spring.ReferenceBean;
+import org.apache.dubbo.config.spring.beans.factory.annotation.ReferenceAnnotationBeanPostProcessor;
+import org.apache.dubbo.config.spring.context.DubboApplicationListenerRegistrar;
+import org.apache.dubbo.config.spring.context.DubboBootstrapApplicationListener;
 import org.springframework.context.annotation.Import;
 
 import java.lang.annotation.Documented;
@@ -35,6 +42,12 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
+ * 1. 该注解用于驱动解析 Dubbo 配置，解析配置成对应的 {@link AbstractConfig} 配置类并注册
+ * 2. 同时，注册几个公共的工具 Bean
+ * 2.1 例如 {@link ReferenceAnnotationBeanPostProcessor} 用于处理 {@link DubboReference} 和 {@link Reference} 标注的字段，解析出 {@link ReferenceBean} 注入对应的 Bean
+ * 2.2 例如 {@link DubboApplicationListenerRegistrar} 会注册 {@link DubboBootstrapApplicationListener} 监听器，
+ *     在 Spring 应用上下文刷新后执行 Dubbo 启动器，进行初始化工作，会暴露服务提供者，向注册中心进行注册
+ *
  * As a convenient and multiple {@link EnableConfigurationBeanBinding}
  * in default behavior , is equal to single bean bindings with below convention prefixes of properties:
  * <ul>
@@ -72,6 +85,7 @@ public @interface EnableDubboConfig {
 
     /**
      * It indicates whether binding to multiple Spring Beans.
+     * 是否支持绑定多个配置类，例如 dubbo.registries.a.address、dubbo.registries.b.address 配置两个注册中心
      *
      * @return the default value is <code>true</code>
      * @revised 2.5.9

@@ -21,6 +21,12 @@ import org.apache.dubbo.common.extension.SPI;
 @SPI
 public interface Merger<T> {
 
+    /**
+     * 合并 T 数组，返回合并后的 T 对象
+     *
+     * @param items T 数组
+     * @return T 对象
+     */
     T merge(T... items);
 
 }

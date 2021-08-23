@@ -28,8 +28,14 @@ public abstract class AbstractExporter<T> implements Exporter<T> {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass());
 
+    /**
+     * Invoker 对象，可能是一条链，包含一系列 Filter 过滤器
+     */
     private final Invoker<T> invoker;
 
+    /**
+     * 是否取消暴露服务
+     */
     private volatile boolean unexported = false;
 
     public AbstractExporter(Invoker<T> invoker) {

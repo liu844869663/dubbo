@@ -108,15 +108,23 @@ public abstract class Wrapper {
      * @return Wrapper instance(not null).
      */
     public static Wrapper getWrapper(Class<?> c) {
+        // 是否是动态生成的 Class 对象
+        // 因为 Dubbo 使用 Javassist 动态生成的类都会实现 ClassGenerator.DC 这个接口
         while (ClassGenerator.isDynamicClass(c)) // can not wrapper on dynamic class.
         {
+            // 获取其父类
             c = c.getSuperclass();
         }
 
+        // 如果需要包装的类是一个 Object，那么直接返回定义好的包装类
         if (c == Object.class) {
             return OBJECT_WRAPPER;
         }
 
+        // 尝试从缓存中获取这个 Class 对象的包装类，没有的话通过 Javassist 动态生成一个 Wrapper 类
+        // 生成的这个包装类继承 Wrapper 抽象类，也就是实现了 Wrapper 的几个方法
+        // 在这个包装类中可以对被包装着进行操作，设置相关属性，在 invokeMethod(..) 方法中执行对应的方法
+        // 你可以理解为是对 Dubbo 服务提供者进行了一层包装，其中通过 invokeMethod(..) 方法可以执行它的方法
         return WRAPPER_MAP.computeIfAbsent(c, Wrapper::makeWrapper);
     }
 

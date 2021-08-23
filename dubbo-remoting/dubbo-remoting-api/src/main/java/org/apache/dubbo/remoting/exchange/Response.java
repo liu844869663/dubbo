@@ -29,65 +29,103 @@ public class Response {
     public static final byte OK = 20;
 
     /**
+     * 客户端超时
+     * <p>
      * client side timeout.
      */
     public static final byte CLIENT_TIMEOUT = 30;
 
     /**
+     * 服务端超时
+     * <p>
      * server side timeout.
      */
     public static final byte SERVER_TIMEOUT = 31;
 
     /**
+     * 通道无效，返回未完成的请求
+     * <p>
      * channel inactive, directly return the unfinished requests.
      */
     public static final byte CHANNEL_INACTIVE = 35;
 
     /**
+     * 请求错误
+     * <p>
      * request format error.
      */
     public static final byte BAD_REQUEST = 40;
 
     /**
+     * 响应错误
+     * <p>
      * response format error.
      */
     public static final byte BAD_RESPONSE = 50;
 
     /**
+     * 服务没找到
+     * <p>
      * service not found.
      */
     public static final byte SERVICE_NOT_FOUND = 60;
 
     /**
+     * 服务出现异常
+     * <p>
      * service error.
      */
     public static final byte SERVICE_ERROR = 70;
 
     /**
+     * 服务端服务器内部异常
+     * <p>
      * internal server error.
      */
     public static final byte SERVER_ERROR = 80;
 
     /**
+     * 客户端服务器内部异常
+     * <p>
      * internal server error.
      */
     public static final byte CLIENT_ERROR = 90;
 
     /**
+     * 服务端的线程池已耗尽
+     * <p>
      * server side threadpool exhausted and quick return.
      */
     public static final byte SERVER_THREADPOOL_EXHAUSTED_ERROR = 100;
 
+    /**
+     * 响应编号
+     */
     private long mId = 0;
 
+    /**
+     * Dubbo PRC 版本
+     */
     private String mVersion;
 
+    /**
+     * 响应状态
+     */
     private byte mStatus = OK;
 
+    /**
+     * 是否是事件
+     */
     private boolean mEvent = false;
 
+    /**
+     * 错误消息
+     */
     private String mErrorMsg;
 
+    /**
+     * 结果
+     */
     private Object mResult;
 
     public Response() {

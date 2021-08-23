@@ -29,9 +29,13 @@ public class ServiceDiscoveryRegistryFactory extends AbstractRegistryFactory {
     @Override
     protected Registry createRegistry(URL url) {
         if (SERVICE_REGISTRY_PROTOCOL.equalsIgnoreCase(url.getProtocol())) {
+            // 获取 `registry` 参数值
             String protocol = url.getParameter(REGISTRY_KEY, DEFAULT_REGISTRY);
+            // 重新设置协议为 `registry` 参数值，例如设置为 `zookeeper`
+            // 同时移除 `registry` 参数
             url = url.setProtocol(protocol).removeParameter(REGISTRY_KEY);
         }
+        // 返回一个 ServiceDiscoveryRegistry 对象
         return new ServiceDiscoveryRegistry(url);
     }
 

@@ -21,6 +21,8 @@ import org.apache.dubbo.common.extension.Adaptive;
 import org.apache.dubbo.common.extension.SPI;
 
 /**
+ * 注册中心工厂对象，可通过 Dubbo SPI 进行扩展，默认为 `dubbo`
+ * <p>
  * RegistryFactory. (SPI, Singleton, ThreadSafe)
  *
  * @see org.apache.dubbo.registry.support.AbstractRegistryFactory
@@ -29,18 +31,18 @@ import org.apache.dubbo.common.extension.SPI;
 public interface RegistryFactory {
 
     /**
-     * Connect to the registry
+     * 获取一个注册中心对象，同时会与注册中心建立连接
      * <p>
-     * Connecting the registry needs to support the contract: <br>
-     * 1. When the check=false is set, the connection is not checked, otherwise the exception is thrown when disconnection <br>
-     * 2. Support username:password authority authentication on URL.<br>
-     * 3. Support the backup=10.20.153.10 candidate registry cluster address.<br>
-     * 4. Support file=registry.cache local disk file cache.<br>
-     * 5. Support the timeout=1000 request timeout setting.<br>
-     * 6. Support session=60000 session timeout or expiration settings.<br>
+     * 连接注册中心需处理契约：<br>
+     * 1. 当设置 check=false 时表示不检查连接，否则在连接不上会抛出异常<br>
+     * 2. 支持 URL上 的 username:password 权限认证<br>
+     * 3. 支持 backup=zk集群地址 备选注册中心集群地址<br>
+     * 4. 支持 file=registry.cache 本地磁盘文件缓存<br>
+     * 5. 支持 timeout=1000 连接超时设置<br>
+     * 6. 支持 session=60000 会话过期设置<br>
      *
-     * @param url Registry address, is not allowed to be empty
-     * @return Registry reference, never return empty value
+     * @param url 注册中心 URL 对象，不允许为空
+     * @return 注册中心的引用对象，不会返回空
      */
     @Adaptive({"protocol"})
     Registry getRegistry(URL url);

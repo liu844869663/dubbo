@@ -64,13 +64,18 @@ public class DubboShutdownHook extends Thread {
         return DUBBO_SHUTDOWN_HOOK;
     }
 
+    /**
+     * JVM 关闭时触发当前钩子函数，提示：kill -9 不会触发
+     */
     @Override
     public void run() {
         if (logger.isInfoEnabled()) {
             logger.info("Run shutdown hook now.");
         }
 
+        // 触发所有的回调，例如执行 DubboBootstrap#destroy() 方法
         callback();
+        // 派发 DubboServiceDestroyedEvent 事件
         doDestroy();
     }
 
@@ -86,6 +91,8 @@ public class DubboShutdownHook extends Thread {
     }
 
     /**
+     * 向 JVM 注册一个钩子函数
+     *
      * Register the ShutdownHook
      */
     public void register() {
@@ -124,8 +131,12 @@ public class DubboShutdownHook extends Thread {
     }
 
     public static void destroyAll() {
+        // 将销毁状态由 false 改为 true
         if (destroyed.compareAndSet(false, true)) {
+            // 销毁所有注册中心，例如关闭 zk 客户端，取消所有订阅
+            // 已销毁不进行任何操作
             AbstractRegistryFactory.destroyAll();
+            // 销毁所有协议
             destroyProtocols();
         }
     }
@@ -139,6 +150,7 @@ public class DubboShutdownHook extends Thread {
             try {
                 Protocol protocol = loader.getLoadedExtension(protocolName);
                 if (protocol != null) {
+                    // 销毁这个协议，例如关闭 netty 服务器
                     protocol.destroy();
                 }
             } catch (Throwable t) {

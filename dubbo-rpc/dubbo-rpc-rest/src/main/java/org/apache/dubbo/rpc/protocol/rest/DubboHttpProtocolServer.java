@@ -38,9 +38,21 @@ import java.util.Enumeration;
 
 public class DubboHttpProtocolServer extends BaseRestProtocolServer {
 
+    /**
+     * Resteasy HttpServletDispatcher
+     */
     private final HttpServletDispatcher dispatcher = new HttpServletDispatcher();
+    /**
+     * Resteasy ResteasyDeployment
+     */
     private final ResteasyDeployment deployment = new ResteasyDeployment();
+    /**
+     * Dubbo HttpBinder$Adaptive
+     */
     private HttpBinder httpBinder;
+    /**
+     * HttpServer 对象
+     */
     private HttpServer httpServer;
 //    private boolean isExternalServer;
 
@@ -51,8 +63,10 @@ public class DubboHttpProtocolServer extends BaseRestProtocolServer {
     @Override
     protected void doStart(URL url) {
         // TODO jetty will by default enable keepAlive so the xml config has no effect now
+        // 创建 HttpServer 对象，使用 RestHandler 作为处理器。
         httpServer = httpBinder.bind(url, new RestHandler());
 
+        // 获得 ServletContext 对象
         ServletContext servletContext = ServletManager.getInstance().getServletContext(url.getPort());
         if (servletContext == null) {
             servletContext = ServletManager.getInstance().getServletContext(ServletManager.EXTERNAL_SERVER_PORT);
@@ -62,9 +76,11 @@ public class DubboHttpProtocolServer extends BaseRestProtocolServer {
                     "make sure that you've configured " + BootstrapListener.class.getName() + " in web.xml");
         }
 
+        // 设置 ResteasyDeployment
         servletContext.setAttribute(ResteasyDeployment.class.getName(), deployment);
 
         try {
+            // 初始化 Resteasy HttpServletDispatcher
             dispatcher.init(new SimpleServletConfig(servletContext));
         } catch (ServletException e) {
             throw new RpcException(e);

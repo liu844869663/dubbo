@@ -18,8 +18,18 @@ package org.apache.dubbo.remoting.zookeeper;
 
 import java.util.List;
 
+/**
+ * 子节点监听器
+ * 例如监听某个服务的 `/providers` 子节点，当服务提供者发送变化时，这里会及时监听到并执行回调
+ */
 public interface ChildListener {
 
+    /**
+     * 子节点发生变化的回调
+     *
+     * @param path     节点
+     * @param children 最新的子节点列表
+     */
     void childChanged(String path, List<String> children);
 
 }

@@ -21,7 +21,9 @@ import org.apache.dubbo.common.Version;
 import org.apache.dubbo.common.extension.ExtensionLoader;
 import org.apache.dubbo.common.logger.Logger;
 import org.apache.dubbo.common.logger.LoggerFactory;
+import org.apache.dubbo.common.threadpool.ThreadPool;
 import org.apache.dubbo.common.threadpool.manager.ExecutorRepository;
+import org.apache.dubbo.common.threadpool.support.fixed.FixedThreadPool;
 import org.apache.dubbo.common.utils.NetUtils;
 import org.apache.dubbo.remoting.Channel;
 import org.apache.dubbo.remoting.ChannelHandler;
@@ -40,28 +42,46 @@ import static org.apache.dubbo.common.constants.CommonConstants.THREADPOOL_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.THREAD_NAME_KEY;
 
 /**
+ * 客户端抽象类，重点实现了公用的重连逻辑
+ * <p>
  * AbstractClient
  */
 public abstract class AbstractClient extends AbstractEndpoint implements Client {
 
     protected static final String CLIENT_THREAD_POOL_NAME = "DubboClientHandler";
     private static final Logger logger = LoggerFactory.getLogger(AbstractClient.class);
+    /**
+     * 连接锁
+     */
     private final Lock connectLock = new ReentrantLock();
+    /**
+     * 是否需要重连，默认需要
+     */
     private final boolean needReconnect;
     //issue-7054:Consumer's executor is sharing globally.
+    /**
+     * 线程池
+     */
     protected volatile ExecutorService executor;
+    /**
+     * 线程池仓库
+     */
     private ExecutorRepository executorRepository = ExtensionLoader.getExtensionLoader(ExecutorRepository.class).getDefaultExtension();
 
     public AbstractClient(URL url, ChannelHandler handler) throws RemotingException {
         super(url, handler);
         // set default needReconnect true when channel is not connected
+        // 设置是否需要重连，默认需要
         needReconnect = url.getParameter(Constants.SEND_RECONNECT_KEY, true);
 
+        // 初始化线程池
         initExecutor(url);
 
         try {
+            // 初始化客户端
             doOpen();
         } catch (Throwable t) {
+            // 抛出异常则关闭
             close();
             throw new RemotingException(url.toInetSocketAddress(), null,
                     "Failed to start " + getClass().getSimpleName() + " " + NetUtils.getLocalAddress()
@@ -69,12 +89,13 @@ public abstract class AbstractClient extends AbstractEndpoint implements Client 
         }
 
         try {
-            // connect.
+            // 连接服务器
             connect();
             if (logger.isInfoEnabled()) {
                 logger.info("Start " + getClass().getSimpleName() + " " + NetUtils.getLocalAddress() + " connect to the server " + getRemoteAddress());
             }
         } catch (RemotingException t) {
+            // 如果设置了 `check=true`，需要检查，则关闭，并抛出异常
             if (url.getParameter(Constants.CHECK_KEY, true)) {
                 close();
                 throw t;
@@ -83,6 +104,7 @@ public abstract class AbstractClient extends AbstractEndpoint implements Client 
                         + " connect to the server " + getRemoteAddress() + " (check == false, ignore and retry later!), cause: " + t.getMessage(), t);
             }
         } catch (Throwable t) {
+            // 抛出异常则关闭
             close();
             throw new RemotingException(url.toInetSocketAddress(), null,
                     "Failed to start " + getClass().getSimpleName() + " " + NetUtils.getLocalAddress()
@@ -92,8 +114,17 @@ public abstract class AbstractClient extends AbstractEndpoint implements Client 
 
     private void initExecutor(URL url) {
         //issue-7054:Consumer's executor is sharing globally, thread name not require provider ip.
+        // 添加 `threadname` 线程池名称参数，如果没有的话
         url = url.addParameter(THREAD_NAME_KEY, CLIENT_THREAD_POOL_NAME);
+        // 添加 `threadpool` 线程池类型，如果没有的话，默认为 `fixed`
         url = url.addParameterIfAbsent(THREADPOOL_KEY, DEFAULT_CLIENT_THREADPOOL);
+        /**
+         * 1. 尝试从线程池仓库中根据 Dubbo 端口号（消费端取最大值）获取对应的线程池
+         *
+         * 2. 没有的话，Dubbo SPI 获取对应的 {@link ThreadPool} 实现类创建一个
+         *
+         * 3.例如 {@link FixedThreadPool} 创建一个线程池，核心线程数和最大线程数都是 200 个，固定好大小
+         */
         executor = executorRepository.createExecutorIfAbsent(url);
     }
 
@@ -170,39 +201,47 @@ public abstract class AbstractClient extends AbstractEndpoint implements Client 
 
     @Override
     public void send(Object message, boolean sent) throws RemotingException {
+        // 未连接时，先进行连接
         if (needReconnect && !isConnected()) {
             connect();
         }
+        // 获取通信通道
         Channel channel = getChannel();
         //TODO Can the value returned by getChannel() be null? need improvement.
         if (channel == null || !channel.isConnected()) {
             throw new RemotingException(this, "message can not send, because channel is closed . url:" + getUrl());
         }
+        // 发送消息
         channel.send(message, sent);
     }
 
     protected void connect() throws RemotingException {
+        // 获得锁
         connectLock.lock();
 
         try {
+            // 已连接，则直接返回
             if (isConnected()) {
                 return;
             }
 
+            // 已关闭，或者正在关闭，则打印日志，直接返回
             if (isClosed() || isClosing()) {
                 logger.warn("No need to connect to server " + getRemoteAddress() + " from " + getClass().getSimpleName() + " "
                         + NetUtils.getLocalHost() + " using dubbo version " + Version.getVersion() + ", cause: client status is closed or closing.");
                 return;
             }
 
+            // 执行连接
             doConnect();
 
+            // 连接失败，抛出异常
             if (!isConnected()) {
                 throw new RemotingException(this, "Failed connect to server " + getRemoteAddress() + " from " + getClass().getSimpleName() + " "
                                 + NetUtils.getLocalHost() + " using dubbo version " + Version.getVersion()
                                 + ", cause: Connect wait timeout: " + getConnectTimeout() + "ms.");
 
-            } else {
+            } else { // 否则，打印连接成功日志
                 if (logger.isInfoEnabled()) {
                     logger.info("Successed connect to server " + getRemoteAddress() + " from " + getClass().getSimpleName() + " "
                                     + NetUtils.getLocalHost() + " using dubbo version " + Version.getVersion()
@@ -219,6 +258,7 @@ public abstract class AbstractClient extends AbstractEndpoint implements Client 
                             + ", cause: " + e.getMessage(), e);
 
         } finally {
+            // 释放锁
             connectLock.unlock();
         }
     }

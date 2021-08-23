@@ -44,6 +44,7 @@ public class TpsLimitFilter implements Filter {
     @Override
     public Result invoke(Invoker<?> invoker, Invocation invocation) throws RpcException {
 
+        // 如果限流，则抛出异常
         if (!tpsLimiter.isAllowable(invoker.getUrl(), invocation)) {
             throw new RpcException(
                     "Failed to invoke service " +
@@ -53,6 +54,7 @@ public class TpsLimitFilter implements Filter {
                             " because exceed max service tps.");
         }
 
+        // 服务调用
         return invoker.invoke(invocation);
     }
 

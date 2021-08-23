@@ -49,18 +49,32 @@ import static org.apache.dubbo.remoting.utils.UrlUtils.getHeartbeat;
 import static org.apache.dubbo.remoting.utils.UrlUtils.getIdleTimeout;
 
 /**
+ * 基于消息头部( Header )的信息交换服务器实现类
+ * <p>
  * ExchangeServerImpl
  */
 public class HeaderExchangeServer implements ExchangeServer {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass());
 
+    /**
+     * 服务器
+     */
     private final RemotingServer server;
+    /**
+     * 是否关闭
+     */
     private AtomicBoolean closed = new AtomicBoolean(false);
 
+    /**
+     * 任务执行器
+     */
     private static final HashedWheelTimer IDLE_CHECK_TIMER = new HashedWheelTimer(new NamedThreadFactory("dubbo-server-idleCheck", true), 1,
             TimeUnit.SECONDS, TICKS_PER_WHEEL);
 
+    /**
+     * 检测通道的任务，当空闲超过多长时间则进行关闭
+     */
     private CloseTimerTask closeTimerTask;
 
     public HeaderExchangeServer(RemotingServer server) {
@@ -86,7 +100,6 @@ public class HeaderExchangeServer implements ExchangeServer {
              *  If there are any client connections,
              *  our server should be running.
              */
-
             if (channel.isConnected()) {
                 return true;
             }
@@ -102,13 +115,16 @@ public class HeaderExchangeServer implements ExchangeServer {
 
     @Override
     public void close(final int timeout) {
+        // 先设置一个正在关闭标记状态
         startClose();
         if (timeout > 0) {
             final long max = timeout;
             final long start = System.currentTimeMillis();
             if (getUrl().getParameter(Constants.CHANNEL_SEND_READONLYEVENT_KEY, true)) {
+                // 发送 READONLY 事件给所有 Client，表示 Server 服务端不可读了
                 sendChannelReadOnlyEvent();
             }
+            // 等待请求完成
             while (isRunning() && System.currentTimeMillis() - start < max) {
                 try {
                     Thread.sleep(10);
@@ -117,7 +133,9 @@ public class HeaderExchangeServer implements ExchangeServer {
                 }
             }
         }
+        // 标记为已关闭状态，取消通道检测任务
         doClose();
+        // 关闭服务器
         server.close(timeout);
     }
 
@@ -127,11 +145,14 @@ public class HeaderExchangeServer implements ExchangeServer {
     }
 
     private void sendChannelReadOnlyEvent() {
+        // 创建 READONLY_EVENT 请求
         Request request = new Request();
         request.setEvent(READONLY_EVENT);
+        // 无需响应
         request.setTwoWay(false);
         request.setVersion(Version.getProtocolVersion());
 
+        // 发送给所有 Client
         Collection<Channel> channels = getChannels();
         for (Channel channel : channels) {
             try {
@@ -208,6 +229,7 @@ public class HeaderExchangeServer implements ExchangeServer {
 
     @Override
     public void reset(URL url) {
+        // 重置服务器
         server.reset(url);
         try {
             int currHeartbeat = getHeartbeat(getUrl());
@@ -215,7 +237,9 @@ public class HeaderExchangeServer implements ExchangeServer {
             int heartbeat = getHeartbeat(url);
             int idleTimeout = getIdleTimeout(url);
             if (currHeartbeat != heartbeat || currIdleTimeout != idleTimeout) {
+                // 关闭检测通道的任务
                 cancelCloseTask();
+                // 重新创建检测通道的任务
                 startIdleCheckTask(url);
             }
         } catch (Throwable t) {
@@ -260,13 +284,17 @@ public class HeaderExchangeServer implements ExchangeServer {
 
     private void startIdleCheckTask(URL url) {
         if (!server.canHandleIdle()) {
+            // 获取需要检测的通道，也就是当前对象
             AbstractTimerTask.ChannelProvider cp = () -> unmodifiableCollection(HeaderExchangeServer.this.getChannels());
+            // 该通道最大的空闲时间，默认取心跳检测时间的 3 倍，也就是 3*60*1000 ms，三分钟
             int idleTimeout = getIdleTimeout(url);
             long idleTimeoutTick = calculateLeastDuration(idleTimeout);
+            // 创建一个关闭当前通道的任务，超过了最大空闲时间的话
             CloseTimerTask closeTimerTask = new CloseTimerTask(cp, idleTimeoutTick, idleTimeout);
             this.closeTimerTask = closeTimerTask;
 
             // init task and start timer.
+            // 将这个任务防止定时器中
             IDLE_CHECK_TIMER.newTimeout(closeTimerTask, idleTimeoutTick, TimeUnit.MILLISECONDS);
         }
     }

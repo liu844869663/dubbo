@@ -26,7 +26,10 @@ import org.apache.dubbo.rpc.cluster.Cluster;
 import org.apache.dubbo.rpc.cluster.Directory;
 import org.apache.dubbo.rpc.cluster.LoadBalance;
 import org.apache.dubbo.rpc.cluster.interceptor.ClusterInterceptor;
+import org.apache.dubbo.rpc.cluster.interceptor.ConsumerContextClusterInterceptor;
+import org.apache.dubbo.rpc.cluster.interceptor.ZoneAwareClusterInterceptor;
 import org.apache.dubbo.rpc.cluster.support.AbstractClusterInvoker;
+import org.apache.dubbo.rpc.cluster.support.FailoverClusterInvoker;
 
 import java.util.List;
 
@@ -50,6 +53,12 @@ public abstract class AbstractCluster implements Cluster {
 
     @Override
     public <T> Invoker<T> join(Directory<T> directory) throws RpcException {
+        /**
+         * 1. 创建一个 Invoker 对象，例如 {@link FailoverClusterInvoker}，都会封装 `directory` 对象
+         * 2. 构建一条 Invoker 链，在其前面添加一系列 ClusterInterceptor 拦截器
+         *    默认会有 {@link ConsumerContextClusterInterceptor} 拦截器
+         *    `cluster=zone-aware` 会有 {@link ZoneAwareClusterInterceptor} 拦截器
+         */
         return buildClusterInterceptors(doJoin(directory), directory.getUrl().getParameter(REFERENCE_INTERCEPTOR_KEY));
     }
 

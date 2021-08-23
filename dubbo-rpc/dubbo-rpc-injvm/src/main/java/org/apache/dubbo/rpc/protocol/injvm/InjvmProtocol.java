@@ -91,11 +91,14 @@ public class InjvmProtocol extends AbstractProtocol implements Protocol{
 
     @Override
     public <T> Exporter<T> export(Invoker<T> invoker) throws RpcException {
+        // 创建一个 InjvmExporter 对象，并返回
+        // 将其保存至 `exporterMap` 中
         return new InjvmExporter<T>(invoker, invoker.getUrl().getServiceKey(), exporterMap);
     }
 
     @Override
     public <T> Invoker<T> protocolBindingRefer(Class<T> serviceType, URL url) throws RpcException {
+        // 创建一个 InjvmInvoker 对象，并返回
         return new InjvmInvoker<T>(serviceType, url, url.getServiceKey(), exporterMap);
     }
 

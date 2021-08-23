@@ -64,7 +64,9 @@ public class Environment extends LifecycleAdapter implements FrameworkExt {
 
     @Override
     public void initialize() throws IllegalStateException {
+        // 获取 ConfigManager 配置类管理器
         ConfigManager configManager = ApplicationModel.getConfigManager();
+        // 读取配置中心的配置
         Optional<Collection<ConfigCenterConfig>> defaultConfigs = configManager.getDefaultConfigCenter();
         defaultConfigs.ifPresent(configs -> {
             for (ConfigCenterConfig config : configs) {
@@ -73,6 +75,7 @@ public class Environment extends LifecycleAdapter implements FrameworkExt {
             }
         });
 
+        // 将配置中心的配置写入至内存中
         this.externalConfiguration.setProperties(externalConfigurationMap);
         this.appExternalConfiguration.setProperties(appExternalConfigurationMap);
     }

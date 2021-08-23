@@ -74,6 +74,7 @@ public class ContextFilter implements Filter, Filter.Listener {
         UNLOADING_KEYS.add(TIMEOUT_ATTACHMENT_KEY);
 
         // Remove async property to avoid being passed to the following invoke chain.
+        // 清空消费端的异步参数
         UNLOADING_KEYS.add(ASYNC_KEY);
         UNLOADING_KEYS.add(TAG_KEY);
         UNLOADING_KEYS.add(FORCE_USE_TAG);
@@ -81,6 +82,7 @@ public class ContextFilter implements Filter, Filter.Listener {
 
     @Override
     public Result invoke(Invoker<?> invoker, Invocation invocation) throws RpcException {
+        // 创建新的 `attachments` 集合，清理公用的隐式参数
         Map<String, Object> attachments = invocation.getObjectAttachments();
         if (attachments != null) {
             Map<String, Object> newAttach = new HashMap<>(attachments.size());
@@ -93,6 +95,7 @@ public class ContextFilter implements Filter, Filter.Listener {
             attachments = newAttach;
         }
 
+        // 设置 RpcContext 对象
         RpcContext context = RpcContext.getContext();
         context.setInvoker(invoker)
                 .setInvocation(invocation)
@@ -112,6 +115,7 @@ public class ContextFilter implements Filter, Filter.Listener {
 
         // merged from dubbox
         // we may already added some attachments into RpcContext before this filter (e.g. in rest protocol)
+        // 在此过滤器(例如rest协议)之前，我们可能已经在RpcContext中添加了一些附件。
         if (attachments != null) {
             if (context.getObjectAttachments() != null) {
                 context.getObjectAttachments().putAll(attachments);
@@ -121,15 +125,18 @@ public class ContextFilter implements Filter, Filter.Listener {
         }
 
         if (invocation instanceof RpcInvocation) {
+            // 设置 RpcInvocation 对象的 `invoker` 属性
             ((RpcInvocation) invocation).setInvoker(invoker);
         }
 
         try {
+            // 服务调用
             context.clearAfterEachInvoke(false);
             return invoker.invoke(invocation);
         } finally {
             context.clearAfterEachInvoke(true);
             // IMPORTANT! For async scenario, we must remove context from current thread, so we always create a new RpcContext for the next invoke for the same thread.
+            // 移除上下文
             RpcContext.removeContext(true);
             RpcContext.removeServerContext();
         }

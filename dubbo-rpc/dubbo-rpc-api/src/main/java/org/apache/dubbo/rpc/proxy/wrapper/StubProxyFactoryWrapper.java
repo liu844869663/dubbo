@@ -43,12 +43,19 @@ import static org.apache.dubbo.rpc.Constants.STUB_EVENT_METHODS_KEY;
 import static org.apache.dubbo.rpc.Constants.STUB_KEY;
 
 /**
+ * Stub 代理工厂的 Wrapper 包装类，支持本地存根功能
+ *
  * StubProxyFactoryWrapper
  */
 public class StubProxyFactoryWrapper implements ProxyFactory {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(StubProxyFactoryWrapper.class);
 
+    /**
+     * 代理工程的自适应对象
+     *
+     * @see org.apache.dubbo.rpc.ProxyFactory$Adaptive
+     */
     private final ProxyFactory proxyFactory;
 
     private Protocol protocol;
@@ -63,12 +70,18 @@ public class StubProxyFactoryWrapper implements ProxyFactory {
 
     @Override
     public <T> T getProxy(Invoker<T> invoker, boolean generic) throws RpcException {
+        // 先为这个 Invoker 对象创建一个动态代理对象
         T proxy = proxyFactory.getProxy(invoker, generic);
+        // 如果没有开启泛化引用
         if (GenericService.class != invoker.getInterface()) {
             URL url = invoker.getUrl();
+            // 获取 `stub` 参数
             String stub = url.getParameter(STUB_KEY, url.getParameter(LOCAL_KEY));
+            // 如果需要本地存根
             if (ConfigUtils.isNotEmpty(stub)) {
                 Class<?> serviceType = invoker.getInterface();
+                // 如果 `stub` 为 `true` 或者 `default`，则本地存根的名称就是服务名称后面添加 Stub
+                // 否则的话，就是配置的本地存根名称
                 if (ConfigUtils.isDefault(stub)) {
                     if (url.hasParameter(STUB_KEY)) {
                         stub = serviceType.getName() + "Stub";
@@ -77,15 +90,18 @@ public class StubProxyFactoryWrapper implements ProxyFactory {
                     }
                 }
                 try {
+                    // 加载出本地存根的 Class 对象来
                     Class<?> stubClass = ReflectUtils.forName(stub);
                     if (!serviceType.isAssignableFrom(stubClass)) {
                         throw new IllegalStateException("The stub implementation class " + stubClass.getName() + " not implement interface " + serviceType.getName());
                     }
                     try {
+                        // 获取本地存根指定构造器，创建一个实例对象，封装了原先的 `proxy` 对象
                         Constructor<?> constructor = ReflectUtils.findConstructor(stubClass, serviceType);
                         proxy = (T) constructor.newInstance(new Object[]{proxy});
                         //export stub service
                         URLBuilder urlBuilder = URLBuilder.from(url);
+                        // 如果需要暴露本地存根这个服务，则进行暴露，默认不需要
                         if (url.getParameter(STUB_EVENT_KEY, DEFAULT_STUB_EVENT)) {
                             urlBuilder.addParameter(STUB_EVENT_METHODS_KEY, StringUtils.join(Wrapper.getWrapper(proxy.getClass()).getDeclaredMethodNames(), ","));
                             urlBuilder.addParameter(IS_SERVER_KEY, Boolean.FALSE.toString());

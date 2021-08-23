@@ -59,14 +59,23 @@ import static org.apache.dubbo.rpc.Constants.TOKEN_KEY;
  */
 public class DubboInvoker<T> extends AbstractInvoker<T> {
 
+    /**
+     * 通信客户端数组
+     */
     private final ExchangeClient[] clients;
 
     private final AtomicPositiveInteger index = new AtomicPositiveInteger();
 
+    /**
+     * 服务版本
+     */
     private final String version;
 
     private final ReentrantLock destroyLock = new ReentrantLock();
 
+    /**
+     * 缓存的所有 Invoker 对象（服务消费者）
+     */
     private final Set<Invoker<?>> invokers;
 
     public DubboInvoker(Class<T> serviceType, URL url, ExchangeClient[] clients) {
@@ -84,31 +93,45 @@ public class DubboInvoker<T> extends AbstractInvoker<T> {
     @Override
     protected Result doInvoke(final Invocation invocation) throws Throwable {
         RpcInvocation inv = (RpcInvocation) invocation;
+        // 获取方法名称，如果是通过 GenericService$invoke 泛化调用，则方法名称就是第一个参数值
         final String methodName = RpcUtils.getMethodName(invocation);
+        // 设置 `path`，也就是服务名称
         inv.setAttachment(PATH_KEY, getUrl().getPath());
+        // 设置 `version` 服务版本
         inv.setAttachment(VERSION_KEY, version);
 
+        // 获取一个通信客户端
         ExchangeClient currentClient;
         if (clients.length == 1) {
             currentClient = clients[0];
         } else {
             currentClient = clients[index.getAndIncrement() % clients.length];
         }
+        // 开始远程调用
         try {
+            // 是否是单向调用，设置了 `return=false` 表示请求发送成功后直接返回 Null
             boolean isOneway = RpcUtils.isOneway(getUrl(), invocation);
+            // 计算超时时间，并进行设置
             int timeout = calculateTimeout(invocation, methodName);
             invocation.put(TIMEOUT_KEY, timeout);
-            if (isOneway) {
+            if (isOneway) { // 单向调用
                 boolean isSent = getUrl().getMethodParameter(methodName, Constants.SENT_KEY, false);
+                // 通过通信客户端向远程发送消息，而不是请求
                 currentClient.send(inv, isSent);
+                // 直接返回一个 null 的结果
                 return AsyncRpcResult.newDefaultAsyncResult(invocation);
             } else {
+                // 获取一个线程池，异步的话会被封装成 ThreadlessExecutor 对象
                 ExecutorService executor = getCallbackExecutor(getUrl(), inv);
+                // 通过通信客户端向远程发送请求，得到一个 Future 对象，异步回调，如果是同步请求，则阻塞等待
                 CompletableFuture<AppResponse> appResponseFuture =
                         currentClient.request(inv, timeout, executor).thenApply(obj -> (AppResponse) obj);
                 // save for 2.6.x compatibility, for example, TraceFilter in Zipkin uses com.alibaba.xxx.FutureAdapter
+                // 将这个 Future 设置到当前 RPC 上下文中，向老版本兼容
                 FutureContext.getContext().setCompatibleFuture(appResponseFuture);
+                // 将这个 Future 包装成 AsyncPrcResult 对象
                 AsyncRpcResult result = new AsyncRpcResult(appResponseFuture, inv);
+                // 设置线程池
                 result.setExecutor(executor);
                 return result;
             }
@@ -138,19 +161,25 @@ public class DubboInvoker<T> extends AbstractInvoker<T> {
         // in order to avoid closing a client multiple times, a counter is used in case of connection per jvm, every
         // time when client.close() is called, counter counts down once, and when counter reaches zero, client will be
         // closed.
+        // 如果已经销毁了，则直接返回
         if (super.isDestroyed()) {
             return;
         } else {
             // double check to avoid dup close
+            // 加锁
             destroyLock.lock();
             try {
+                // 再次检查是否被销毁，已被销毁则直接返回
                 if (super.isDestroyed()) {
                     return;
                 }
+                // 设置为被销毁状态
                 super.destroy();
+                // 先从缓存中移除当前 PRC Invoker 对象
                 if (invokers != null) {
                     invokers.remove(this);
                 }
+                // 关闭这个服务提供者所有的通信客户端
                 for (ExchangeClient client : clients) {
                     try {
                         client.close(ConfigurationUtils.getServerShutdownTimeout());

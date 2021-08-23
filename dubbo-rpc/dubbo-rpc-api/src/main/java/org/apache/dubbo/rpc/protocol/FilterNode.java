@@ -25,12 +25,25 @@ import org.apache.dubbo.rpc.Result;
 import org.apache.dubbo.rpc.RpcException;
 
 /**
- * @see org.apache.dubbo.rpc.protocol.ProtocolFilterWrapper
+ * 用于封装 Invoker 的 Filter 节点，形成一条 Filter 链
  *
+ * @see org.apache.dubbo.rpc.protocol.ProtocolFilterWrapper
  */
 class FilterNode<T> implements Invoker<T>{
+
+    /**
+     * 整条 Filter 链路所关联的
+     */
     private final Invoker<T> invoker;
+    /**
+     * 这个 Filter 的下一个 Invoker 对象
+     * 不是最后一个节点就还是一个 FilterNode 节点对象
+     * 最后一个节点就是关联的 Invoker 对象
+     */
     private final Invoker<T> next;
+    /**
+     * 当前 Filter 对象
+     */
     private final Filter filter;
     
     public FilterNode(final Invoker<T> invoker, final Invoker<T> next, final Filter filter) {
@@ -58,26 +71,33 @@ class FilterNode<T> implements Invoker<T>{
     public Result invoke(Invocation invocation) throws RpcException {
         Result asyncResult;
         try {
+            // 获取执行结果，在这个 `filter` 中进行相关处理，最终会调用 `next` 的 invoke 方法
+            // 例如 GenericImplFilter
             asyncResult = filter.invoke(next, invocation);
         } catch (Exception e) {
-            if (filter instanceof ListenableFilter) {
+            if (filter instanceof ListenableFilter) { // 如果这个 Filter 是一个 ListenableFilter 对象
                 ListenableFilter listenableFilter = ((ListenableFilter) filter);
                 try {
+                    // 获取这个请求对应的 Listener 监听器，对这个错误进行处理
                     Filter.Listener listener = listenableFilter.listener(invocation);
                     if (listener != null) {
                         listener.onError(e, invoker, invocation);
                     }
                 } finally {
+                    // 移除这个请求对应的 Listener 监听器
                     listenableFilter.removeListener(invocation);
                 }
-            } else if (filter instanceof Filter.Listener) {
+            } else if (filter instanceof Filter.Listener) { // 如果这个 Filter 还是一个 Listener 监听器
+                // 例如 FutureFilter
                 Filter.Listener listener = (Filter.Listener) filter;
+                // 对这个错误进行处理
                 listener.onError(e, invoker, invocation);
             }
             throw e;
         } finally {
 
         }
+        // 执行结果的回调处理
         return asyncResult.whenCompleteWithContext((r, t) -> {
             if (filter instanceof ListenableFilter) {
                 ListenableFilter listenableFilter = ((ListenableFilter) filter);
@@ -93,7 +113,8 @@ class FilterNode<T> implements Invoker<T>{
                 } finally {
                     listenableFilter.removeListener(invocation);
                 }
-            } else if (filter instanceof Filter.Listener) {
+            } else if (filter instanceof Filter.Listener) {  // 如果这个 Filter 还是一个 Listener 监听器
+                // 例如 FutureFilter
                 Filter.Listener listener = (Filter.Listener) filter;
                 if (t == null) {
                     listener.onResponse(r, invoker, invocation);

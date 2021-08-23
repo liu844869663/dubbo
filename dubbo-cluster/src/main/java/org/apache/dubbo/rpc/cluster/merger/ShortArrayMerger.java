@@ -27,13 +27,16 @@ public class ShortArrayMerger implements Merger<short[]> {
         if (ArrayUtils.isEmpty(items)) {
             return new short[0];
         }
+        // 计算合并后的数组大小
         int total = 0;
         for (short[] array : items) {
             if (array != null) {
                 total += array.length;
             }
         }
+        // 创建结果数组
         short[] result = new short[total];
+        // 合并多个数组
         int index = 0;
         for (short[] array : items) {
             if (array != null) {

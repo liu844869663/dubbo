@@ -35,13 +35,21 @@ public abstract class AbstractEndpoint extends AbstractPeer implements Resetable
 
     private static final Logger logger = LoggerFactory.getLogger(AbstractEndpoint.class);
 
+    /**
+     * 编码器
+     */
     private Codec2 codec;
 
+    /**
+     * 连接超时时间
+     */
     private int connectTimeout;
 
     public AbstractEndpoint(URL url, ChannelHandler handler) {
         super(url, handler);
+        // Dubbo SPI 根据协议加载对应编码器，例如 dubbo 得到 DubboCountCodec 对象
         this.codec = getChannelCodec(url);
+        // 设置连接超时时间，默认 3s
         this.connectTimeout = url.getPositiveParameter(Constants.CONNECT_TIMEOUT_KEY, Constants.DEFAULT_CONNECT_TIMEOUT);
     }
 
@@ -63,6 +71,7 @@ public abstract class AbstractEndpoint extends AbstractPeer implements Resetable
         }
 
         try {
+            // 重置连接超时时间
             if (url.hasParameter(Constants.CONNECT_TIMEOUT_KEY)) {
                 int t = url.getParameter(Constants.CONNECT_TIMEOUT_KEY, 0);
                 if (t > 0) {
@@ -74,6 +83,7 @@ public abstract class AbstractEndpoint extends AbstractPeer implements Resetable
         }
 
         try {
+            // 重置编码器
             if (url.hasParameter(Constants.CODEC_KEY)) {
                 this.codec = getChannelCodec(url);
             }

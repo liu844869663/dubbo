@@ -38,6 +38,8 @@ import static org.apache.dubbo.rpc.cluster.Constants.PRIORITY_KEY;
 public interface Configurator extends Comparable<Configurator> {
 
     /**
+     * 配置规则
+     *
      * Get the configurator url.
      *
      * @return configurator url.
@@ -45,6 +47,8 @@ public interface Configurator extends Comparable<Configurator> {
     URL getUrl();
 
     /**
+     * 配置到 URL 中
+     *
      * Configure the provider url.
      *
      * @param url - old provider url.

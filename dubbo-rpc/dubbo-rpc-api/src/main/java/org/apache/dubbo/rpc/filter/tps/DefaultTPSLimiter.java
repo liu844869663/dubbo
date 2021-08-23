@@ -38,12 +38,17 @@ public class DefaultTPSLimiter implements TPSLimiter {
 
     @Override
     public boolean isAllowable(URL url, Invocation invocation) {
+        // 获取这个服务的 tps 配置，默认为 -1，不限制
         int rate = url.getParameter(TPS_LIMIT_RATE_KEY, -1);
+        // 获取这个服务的 tpc 周期配置项，默认为 60s
         long interval = url.getParameter(TPS_LIMIT_INTERVAL_KEY, DEFAULT_TPS_LIMIT_INTERVAL);
         String serviceKey = url.getServiceKey();
+        // 大于 0，表示需要限流
         if (rate > 0) {
+            // 获得 StatItem 对象
             StatItem statItem = stats.get(serviceKey);
             if (statItem == null) {
+                // 缓存中不存在则创建一个
                 stats.putIfAbsent(serviceKey, new StatItem(serviceKey, rate, interval));
                 statItem = stats.get(serviceKey);
             } else {
@@ -53,14 +58,17 @@ public class DefaultTPSLimiter implements TPSLimiter {
                     statItem = stats.get(serviceKey);
                 }
             }
+            // 根据 TPS 限流规则判断是否限制此次调用
             return statItem.isAllowable();
-        } else {
+        } else { // 不限流
             StatItem statItem = stats.get(serviceKey);
             if (statItem != null) {
+                // 移除 StatItem
                 stats.remove(serviceKey);
             }
         }
 
+        // 返回通过
         return true;
     }
 

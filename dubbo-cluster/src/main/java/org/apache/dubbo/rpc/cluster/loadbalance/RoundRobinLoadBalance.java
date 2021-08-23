@@ -28,6 +28,9 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
+ * 轮循，按公约后的权重设置轮循比率
+ * 存在慢的提供者累积请求的问题，比如：第二台机器很慢，但没挂，当请求调到第二台时就卡在那，久而久之，所有请求都卡在调到第二台上
+ *
  * Round robin load balance.
  */
 public class RoundRobinLoadBalance extends AbstractLoadBalance {
@@ -36,6 +39,9 @@ public class RoundRobinLoadBalance extends AbstractLoadBalance {
     private static final int RECYCLE_PERIOD = 60000;
 
     protected static class WeightedRoundRobin {
+        /**
+         * 权重
+         */
         private int weight;
         private AtomicLong current = new AtomicLong(0);
         private long lastUpdate;
@@ -95,6 +101,7 @@ public class RoundRobinLoadBalance extends AbstractLoadBalance {
         long now = System.currentTimeMillis();
         Invoker<T> selectedInvoker = null;
         WeightedRoundRobin selectedWRR = null;
+        // 计算最小、最大权重，总的权重和
         for (Invoker<T> invoker : invokers) {
             String identifyString = invoker.getUrl().toIdentityString();
             int weight = getWeight(invoker, invocation);
@@ -108,10 +115,13 @@ public class RoundRobinLoadBalance extends AbstractLoadBalance {
                 //weight changed
                 weightedRoundRobin.setWeight(weight);
             }
+            // 当前的权重
             long cur = weightedRoundRobin.increaseCurrent();
             weightedRoundRobin.setLastUpdate(now);
+            // 权重不相等，默认取第一个
             if (cur > maxCurrent) {
                 maxCurrent = cur;
+                // 选择这个权重很高的 Invoker 对象
                 selectedInvoker = invoker;
                 selectedWRR = weightedRoundRobin;
             }
@@ -121,6 +131,7 @@ public class RoundRobinLoadBalance extends AbstractLoadBalance {
             map.entrySet().removeIf(item -> now - item.getValue().getLastUpdate() > RECYCLE_PERIOD);
         }
         if (selectedInvoker != null) {
+            // 设置这个被选中的 Invoker 对象的权重为 weight - total weight，这样就变成最小的了
             selectedWRR.sel(totalWeight);
             return selectedInvoker;
         }

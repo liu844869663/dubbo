@@ -46,6 +46,13 @@ public abstract class AbstractProtocol implements Protocol {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass());
 
+    /**
+     * 保存每种协议的 Exporter 集合（服务提供者）
+     * key：Dubbo 服务的键，例如 {@link #serviceKey(URL) 或者 {@link URL#getServiceKey()}，不同协议生成的方式不同
+     *  injvm --> {@link URL#getServiceKey()}，参考：`分组名称/接口名称:版本号`
+     *  dubbo --> {@link #serviceKey(URL)，参考：`分组名称/接口名称:版本号:端口号`
+     * value：Dubbo 服务对应的 Exporter 对象
+     */
     protected final Map<String, Exporter<?>> exporterMap = new ConcurrentHashMap<String, Exporter<?>>();
 
     /**
@@ -54,6 +61,9 @@ public abstract class AbstractProtocol implements Protocol {
     protected final Map<String, ProtocolServer> serverMap = new ConcurrentHashMap<>();
 
     //TODO SoftReference
+    /**
+     * 保存 Invoker 对象（服务消费者）
+     */
     protected final Set<Invoker<?>> invokers = new ConcurrentHashSet<Invoker<?>>();
 
     protected static String serviceKey(URL url) {
@@ -101,6 +111,8 @@ public abstract class AbstractProtocol implements Protocol {
 
     @Override
     public <T> Invoker<T> refer(Class<T> type, URL url) throws RpcException {
+        // 先创建一个 DubboInvoker 对象
+        // 然后将其封装成 AsyncToSyncInvoker 对象并返回
         return new AsyncToSyncInvoker<>(protocolBindingRefer(type, url));
     }
 

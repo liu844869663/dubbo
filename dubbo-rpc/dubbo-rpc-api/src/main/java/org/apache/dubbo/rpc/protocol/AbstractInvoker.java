@@ -144,11 +144,14 @@ public abstract class AbstractInvoker<T> implements Invoker<T> {
                     + ", dubbo version is " + Version.getVersion() + ", this invoker should not be used any longer");
         }
         RpcInvocation invocation = (RpcInvocation) inv;
+        // 在请求参数对象中设置 Invoker 对象为 this
         invocation.setInvoker(this);
+        // 添加公共的隐式传参，例如 `path`、`interface` 等等
         if (CollectionUtils.isNotEmptyMap(attachment)) {
             invocation.addObjectAttachmentsIfAbsent(attachment);
         }
 
+        // 设置上一个消费者端传过来的自定义隐式参数
         Map<String, Object> contextAttachments = RpcContext.getContext().getObjectAttachments();
         if (CollectionUtils.isNotEmptyMap(contextAttachments)) {
             /**
@@ -160,9 +163,11 @@ public abstract class AbstractInvoker<T> implements Invoker<T> {
             invocation.addObjectAttachments(contextAttachments);
         }
 
+        // 设置执行模式，同步、异步和 Future
         invocation.setInvokeMode(RpcUtils.getInvokeMode(url, invocation));
         RpcUtils.attachInvocationIdIfAsync(getUrl(), invocation);
 
+        // 设置序列化方式，默认为 hessian2，面向生产环境建议优先选择 kryo
         Byte serializationId = CodecSupport.getIDByName(getUrl().getParameter(SERIALIZATION_KEY, DEFAULT_REMOTING_SERIALIZATION));
         if (serializationId != null) {
             invocation.put(SERIALIZATION_ID_KEY, serializationId);
@@ -170,8 +175,10 @@ public abstract class AbstractInvoker<T> implements Invoker<T> {
 
         AsyncRpcResult asyncResult;
         try {
+            // 执行调用，返回的都是 AsyncRpcResult 异步执行结果，抽象方法
             asyncResult = (AsyncRpcResult) doInvoke(invocation);
         } catch (InvocationTargetException e) { // biz exception
+            // 如果执行过程发生异常，则返回一个异常结果
             Throwable te = e.getTargetException();
             if (te == null) {
                 asyncResult = AsyncRpcResult.newDefaultAsyncResult(null, e, invocation);
@@ -190,6 +197,7 @@ public abstract class AbstractInvoker<T> implements Invoker<T> {
         } catch (Throwable e) {
             asyncResult = AsyncRpcResult.newDefaultAsyncResult(null, e, invocation);
         }
+        // 将异步处理的 Future 对象封装成 FutureAdapter 对象，并设置到当前 RPC 上下文中
         RpcContext.getContext().setFuture(new FutureAdapter(asyncResult.getResponseFuture()));
         return asyncResult;
     }

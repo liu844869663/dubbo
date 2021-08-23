@@ -47,6 +47,7 @@ public class NettyRestProtocolServer extends BaseRestProtocolServer {
 
     @Override
     protected void doStart(URL url) {
+        // 设置 NettyJaxrsServer 的属性
         String bindIp = url.getParameter(BIND_IP_KEY, url.getHost());
         if (!url.isAnyHost() && NetUtils.isValidLocalHost(bindIp)) {
             server.setHostname(bindIp);
@@ -58,6 +59,7 @@ public class NettyRestProtocolServer extends BaseRestProtocolServer {
         server.setExecutorThreadCount(url.getParameter(THREADS_KEY, DEFAULT_THREADS));
         server.setIoWorkerCount(url.getParameter(IO_THREADS_KEY, DEFAULT_IO_THREADS));
         server.setMaxRequestSize(url.getParameter(PAYLOAD_KEY, DEFAULT_PAYLOAD));
+        // 启动 NettyJaxrsServer
         server.start();
     }
 

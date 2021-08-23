@@ -56,14 +56,29 @@ public class DecodeableRpcInvocation extends RpcInvocation implements Codec, Dec
 
     private static final Logger log = LoggerFactory.getLogger(DecodeableRpcInvocation.class);
 
+    /**
+     * 通道
+     */
     private Channel channel;
 
+    /**
+     * Serialization 类型编号
+     */
     private byte serializationType;
 
+    /**
+     * 输入流
+     */
     private InputStream inputStream;
 
+    /**
+     * 请求
+     */
     private Request request;
 
+    /**
+     * 是否已经解码完成
+     */
     private volatile boolean hasDecoded;
 
     public DecodeableRpcInvocation(Channel channel, Request request, InputStream is, byte id) {
@@ -108,17 +123,22 @@ public class DecodeableRpcInvocation extends RpcInvocation implements Codec, Dec
                 .deserialize(channel.getUrl(), input);
         this.put(SERIALIZATION_ID_KEY, serializationType);
 
+        // 解码 Dubbo RPC 版本
         String dubboVersion = in.readUTF();
         request.setVersion(dubboVersion);
         setAttachment(DUBBO_VERSION_KEY, dubboVersion);
 
+        // 解析 path 服务名称
         String path = in.readUTF();
         setAttachment(PATH_KEY, path);
+        // 解析 version 服务版本
         String version = in.readUTF();
         setAttachment(VERSION_KEY, version);
 
+        // 解析 method 方法名
         setMethodName(in.readUTF());
 
+        // 解析方法参数描述
         String desc = in.readUTF();
         setParameterTypesDesc(desc);
 
@@ -128,6 +148,7 @@ public class DecodeableRpcInvocation extends RpcInvocation implements Codec, Dec
             }
             Object[] args = DubboCodec.EMPTY_OBJECT_ARRAY;
             Class<?>[] pts = DubboCodec.EMPTY_CLASS_ARRAY;
+            // 解码方法参数
             if (desc.length() > 0) {
 //                if (RpcUtils.isGenericCall(path, getMethodName()) || RpcUtils.isEcho(path, getMethodName())) {
 //                    pts = ReflectUtils.desc2classArray(desc);
@@ -162,6 +183,7 @@ public class DecodeableRpcInvocation extends RpcInvocation implements Codec, Dec
             }
             setParameterTypes(pts);
 
+            // 解析隐式参数集合
             Map<String, Object> map = in.readAttachments();
             if (map != null && map.size() > 0) {
                 Map<String, Object> attachment = getObjectAttachments();
@@ -173,6 +195,7 @@ public class DecodeableRpcInvocation extends RpcInvocation implements Codec, Dec
             }
 
             //decode argument ,may be callback
+            // 进一步解码方法参数
             for (int i = 0; i < args.length; i++) {
                 args[i] = decodeInvocationArgument(channel, this, pts, i, args[i]);
             }

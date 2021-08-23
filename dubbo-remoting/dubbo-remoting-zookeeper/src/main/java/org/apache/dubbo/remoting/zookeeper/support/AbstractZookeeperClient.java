@@ -32,23 +32,53 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.Executor;
 
+/**
+ * zk 客户端的抽象类，实现通用逻辑
+ *
+ * @param <TargetDataListener>  节点数据监听器具体对象
+ * @param <TargetChildListener> 子节点监听器具体对象
+ */
 public abstract class AbstractZookeeperClient<TargetDataListener, TargetChildListener> implements ZookeeperClient {
 
     protected static final Logger logger = LoggerFactory.getLogger(AbstractZookeeperClient.class);
 
+    /**
+     * 默认的连接 zk 超时时间 5s
+     */
     protected int DEFAULT_CONNECTION_TIMEOUT_MS = 5 * 1000;
+    /**
+     * 默认的 zk 连接 Session 失效时间 60s
+     */
     protected int DEFAULT_SESSION_TIMEOUT_MS = 60 * 1000;
 
+    /**
+     * 注册中心 URL
+     */
     private final URL url;
 
+    /**
+     * zk 连接状态监听器的集合
+     */
     private final Set<StateListener> stateListeners = new CopyOnWriteArraySet<StateListener>();
 
+    /**
+     * ChildListener 子节点监听器的集合
+     * key1：节点路径
+     * key2：ChildListener 对象
+     * value：监听器具体对象。不同 Zookeeper 客户端，实现会不同。
+     */
     private final ConcurrentMap<String, ConcurrentMap<ChildListener, TargetChildListener>> childListeners = new ConcurrentHashMap<String, ConcurrentMap<ChildListener, TargetChildListener>>();
 
     private final ConcurrentMap<String, ConcurrentMap<DataListener, TargetDataListener>> listeners = new ConcurrentHashMap<String, ConcurrentMap<DataListener, TargetDataListener>>();
 
+    /**
+     * 是否已关闭
+     */
     private volatile boolean closed = false;
 
+    /**
+     * 保存 zk 中已创建的永久节点对应的路径，避免重复创建
+     */
     private final Set<String> persistentExistNodePath = new ConcurrentHashSet<>();
 
     public AbstractZookeeperClient(URL url) {
@@ -70,23 +100,35 @@ public abstract class AbstractZookeeperClient<TargetDataListener, TargetChildLis
 
     @Override
     public void create(String path, boolean ephemeral) {
+        // 如果是永久节点，则进行下面判断
         if (!ephemeral) {
+            // 该永久节点在缓存中，表示已创建，则直接返回
             if (persistentExistNodePath.contains(path)) {
                 return;
             }
+            // 检查 zk 中是否已存在这个节点，抽象方法
             if (checkExists(path)) {
+                // 如果已存在，则将其添加缓存中，然后直接返回
                 persistentExistNodePath.add(path);
                 return;
             }
         }
+        // zookeeper 创建节点只能一级一级的创建
+        // 例如 `/dubbo/org.apache.dubbo.demo.service.StudyService/providers/服务提供者信息`
+        // 除了最后一个服务者提供者信息节点，其他节点先一个一个创建，且都是永久节点
         int i = path.lastIndexOf('/');
+        // 如果 / 不仅仅是在最前面，表示多级路径，则需要先创建前面的路径
         if (i > 0) {
+            // 循环调用这个方法，永久节点
             create(path.substring(0, i), false);
         }
         if (ephemeral) {
+            // 创建临时节点，当与 zk 连接断开是该节点消失，抽象方法
             createEphemeral(path);
         } else {
+            // 创建永久节点，抽象方法
             createPersistent(path);
+            // 将永久节点保存起来，避免
             persistentExistNodePath.add(path);
         }
     }
@@ -107,8 +149,11 @@ public abstract class AbstractZookeeperClient<TargetDataListener, TargetChildLis
 
     @Override
     public List<String> addChildListener(String path, final ChildListener listener) {
+        // 获得该节点下的监听器数组
         ConcurrentMap<ChildListener, TargetChildListener> listeners = childListeners.computeIfAbsent(path, k -> new ConcurrentHashMap<>());
+        // 获取监听器具体对象，没有的话创建一个，抽象方法
         TargetChildListener targetListener = listeners.computeIfAbsent(listener, k -> createTargetChildListener(path, k));
+        // 向 zk 设置这个监听器对象
         return addTargetChildListener(path, targetListener);
     }
 
@@ -137,15 +182,23 @@ public abstract class AbstractZookeeperClient<TargetDataListener, TargetChildLis
 
     @Override
     public void removeChildListener(String path, ChildListener listener) {
+        // 获得该节点下的监听器数组
         ConcurrentMap<ChildListener, TargetChildListener> listeners = childListeners.get(path);
         if (listeners != null) {
+            // 先从本地移除这个 ChildListener 监听器
             TargetChildListener targetListener = listeners.remove(listener);
             if (targetListener != null) {
+                // 从 zk 移除这个监听器对象
                 removeTargetChildListener(path, targetListener);
             }
         }
     }
 
+    /**
+     * 回调 zk 连接状态监听器数组
+     *
+     * @param state 新的 zk 连接状态
+     */
     protected void stateChanged(int state) {
         for (StateListener sessionListener : getSessionListeners()) {
             sessionListener.stateChanged(state);
@@ -159,6 +212,7 @@ public abstract class AbstractZookeeperClient<TargetDataListener, TargetChildLis
         }
         closed = true;
         try {
+            // 关闭连接，抽象方法
             doClose();
         } catch (Throwable t) {
             logger.warn(t.getMessage(), t);
@@ -167,16 +221,25 @@ public abstract class AbstractZookeeperClient<TargetDataListener, TargetChildLis
 
     @Override
     public void create(String path, String content, boolean ephemeral) {
+        // 检查这个路径是否已存在，抽象方法
         if (checkExists(path)) {
+            // 已存在的话则删除
             delete(path);
         }
+        // zookeeper 创建节点只能一级一级的创建
+        // 例如 `/dubbo/org.apache.dubbo.demo.service.StudyService/providers/服务提供者信息`
+        // 除了最后一个服务者提供者信息节点，其他节点先一个一个创建，且都是永久节点
         int i = path.lastIndexOf('/');
+        // 如果 / 不仅仅是在最前面，表示多级路径，则需要先创建前面的路径
         if (i > 0) {
+            // 循环调用这个方法，永久节点
             create(path.substring(0, i), false);
         }
         if (ephemeral) {
+            // 创建临时节点并设置内容，当与 zk 连接断开是该节点消失，抽象方法
             createEphemeral(path, content);
         } else {
+            // 创建永久节点并设置内容，抽象方法
             createPersistent(path, content);
         }
     }

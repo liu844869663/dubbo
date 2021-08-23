@@ -16,16 +16,34 @@
  */
 package org.apache.dubbo.remoting.zookeeper;
 
+/**
+ * zk 连接状态监听器
+ */
 public interface StateListener {
 
+    /**
+     * Session 会话丢失
+     */
     int SESSION_LOST = 0;
 
+    /**
+     * 已连接
+     */
     int CONNECTED = 1;
 
+    /**
+     * 重连
+     */
     int RECONNECTED = 2;
 
+    /**
+     * 被挂起
+     */
     int SUSPENDED = 3;
 
+    /**
+     * 新的 Session 会话创建
+     */
     int NEW_SESSION_CREATED = 4;
 
     void stateChanged(int connected);

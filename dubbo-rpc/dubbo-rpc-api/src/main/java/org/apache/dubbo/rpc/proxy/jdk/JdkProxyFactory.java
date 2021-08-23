@@ -33,11 +33,14 @@ public class JdkProxyFactory extends AbstractProxyFactory {
     @Override
     @SuppressWarnings("unchecked")
     public <T> T getProxy(Invoker<T> invoker, Class<?>[] interfaces) {
+        // 通过 JDK 动态代理创建一个动态代理对象
+        // 创建一个 InvocationHandler 拦截处理器，包装了这个 `invoker` 对象，对方法进行拦截处理
         return (T) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(), interfaces, new InvokerInvocationHandler(invoker));
     }
 
     @Override
     public <T> Invoker<T> getInvoker(T proxy, Class<T> type, URL url) {
+        // 为这个 proxy 对象创建一个 Invoker 对象，用于执行 proxy 的方法（反射）
         return new AbstractProxyInvoker<T>(proxy, type, url) {
             @Override
             protected Object doInvoke(T proxy, String methodName,

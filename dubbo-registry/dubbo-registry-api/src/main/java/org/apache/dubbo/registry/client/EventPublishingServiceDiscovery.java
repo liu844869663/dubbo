@@ -236,8 +236,10 @@ final class EventPublishingServiceDiscovery implements ServiceDiscovery {
     @Override
     public void initialize(URL registryURL) {
 
+        // 如果销毁了，则抛出异常
         assertDestroyed(INITIALIZE_ACTION);
 
+        // 已经初始化，则直接返回
         if (isInitialized()) {
             if (logger.isWarnEnabled()) {
                 logger.warn("It's ignored to start current ServiceDiscovery, because it has been started.");
@@ -245,6 +247,8 @@ final class EventPublishingServiceDiscovery implements ServiceDiscovery {
             return;
         }
 
+        // 初始化 ServiceDiscovery 服务发现对象
+        // 初始化前后都会发布相应的 Event 事件
         executeWithEvents(
                 of(new ServiceDiscoveryInitializingEvent(this, serviceDiscovery)),
                 () -> serviceDiscovery.initialize(registryURL),
@@ -252,6 +256,7 @@ final class EventPublishingServiceDiscovery implements ServiceDiscovery {
         );
 
         // doesn't start -> started
+        // 标记为已经初始化的状态
         initialized.compareAndSet(false, true);
     }
 

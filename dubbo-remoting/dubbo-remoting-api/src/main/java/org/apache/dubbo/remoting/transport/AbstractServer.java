@@ -20,7 +20,9 @@ import org.apache.dubbo.common.URL;
 import org.apache.dubbo.common.extension.ExtensionLoader;
 import org.apache.dubbo.common.logger.Logger;
 import org.apache.dubbo.common.logger.LoggerFactory;
+import org.apache.dubbo.common.threadpool.ThreadPool;
 import org.apache.dubbo.common.threadpool.manager.ExecutorRepository;
+import org.apache.dubbo.common.threadpool.support.fixed.FixedThreadPool;
 import org.apache.dubbo.common.utils.ExecutorUtil;
 import org.apache.dubbo.common.utils.NetUtils;
 import org.apache.dubbo.remoting.Channel;
@@ -39,31 +41,54 @@ import static org.apache.dubbo.remoting.Constants.ACCEPTS_KEY;
 import static org.apache.dubbo.remoting.Constants.DEFAULT_ACCEPTS;
 
 /**
+ * 服务器抽象类，重点实现了公用的逻辑
+ * <p>
  * AbstractServer
  */
 public abstract class AbstractServer extends AbstractEndpoint implements RemotingServer {
 
     protected static final String SERVER_THREAD_POOL_NAME = "DubboServerHandler";
     private static final Logger logger = LoggerFactory.getLogger(AbstractServer.class);
+    /**
+     * 线程池
+     */
     ExecutorService executor;
+    /**
+     * 服务地址
+     */
     private InetSocketAddress localAddress;
+    /**
+     * 绑定地址，ip 可能和上面的不同，例如 0.0.0.0
+     */
     private InetSocketAddress bindAddress;
+    /**
+     * 服务器最大可接受的连接数
+     */
     private int accepts;
 
+    /**
+     * 线程池仓库
+     */
     private ExecutorRepository executorRepository = ExtensionLoader.getExtensionLoader(ExecutorRepository.class).getDefaultExtension();
 
     public AbstractServer(URL url, ChannelHandler handler) throws RemotingException {
+        // Dubbo SPI 根据协议加载对应编码器，例如 dubbo 得到 DubboCountCodec 对象
+        // 设置连接超时时间，默认 3s
         super(url, handler);
+        // 服务地址
         localAddress = getUrl().toInetSocketAddress();
 
+        // 绑定地址
         String bindIp = getUrl().getParameter(Constants.BIND_IP_KEY, getUrl().getHost());
         int bindPort = getUrl().getParameter(Constants.BIND_PORT_KEY, getUrl().getPort());
         if (url.getParameter(ANYHOST_KEY, false) || NetUtils.isInvalidLocalHost(bindIp)) {
             bindIp = ANYHOST_VALUE;
         }
         bindAddress = new InetSocketAddress(bindIp, bindPort);
+        // 服务器最大可接受连接数
         this.accepts = url.getParameter(ACCEPTS_KEY, DEFAULT_ACCEPTS);
         try {
+            // 开启服务器
             doOpen();
             if (logger.isInfoEnabled()) {
                 logger.info("Start " + getClass().getSimpleName() + " bind " + getBindAddress() + ", export " + getLocalAddress());
@@ -72,6 +97,13 @@ public abstract class AbstractServer extends AbstractEndpoint implements Remotin
             throw new RemotingException(url.toInetSocketAddress(), null, "Failed to bind " + getClass().getSimpleName()
                     + " on " + getLocalAddress() + ", cause: " + t.getMessage(), t);
         }
+
+        /**
+         * 1. 尝试从线程池仓库中根据 Dubbo 端口号（消费端取最大值）获取对应的线程池
+         *
+         * 2. 没有的话，Dubbo SPI 获取对应的 {@link ThreadPool} 实现类创建一个
+         *    例如 {@link FixedThreadPool} 创建一个线程池，核心线程数和最大线程数都是 200 个，固定好大小
+         */
         executor = executorRepository.createExecutorIfAbsent(url);
     }
 
@@ -102,7 +134,9 @@ public abstract class AbstractServer extends AbstractEndpoint implements Remotin
 
     @Override
     public void send(Object message, boolean sent) throws RemotingException {
+        // 获得所有的客户端的通道
         Collection<Channel> channels = getChannels();
+        // 群发消息
         for (Channel channel : channels) {
             if (channel.isConnected()) {
                 channel.send(message, sent);
@@ -150,6 +184,7 @@ public abstract class AbstractServer extends AbstractEndpoint implements Remotin
         return accepts;
     }
 
+    // 被客户端连接
     @Override
     public void connected(Channel ch) throws RemotingException {
         // If the server has entered the shutdown process, reject any new connection
@@ -159,11 +194,13 @@ public abstract class AbstractServer extends AbstractEndpoint implements Remotin
             return;
         }
 
+        // 超过上限，关闭新的链接
         if (accepts > 0 && getChannels().size() > accepts) {
             logger.error("Close channel " + ch + ", cause: The server " + ch.getLocalAddress() + " connections greater than max config " + accepts);
             ch.close();
             return;
         }
+        // 连接
         super.connected(ch);
     }
 

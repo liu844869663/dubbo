@@ -92,12 +92,14 @@ public class DubboAnnotationUtils {
 
         ClassLoader classLoader = defaultInterfaceClass != null ? defaultInterfaceClass.getClassLoader() : Thread.currentThread().getContextClassLoader();
 
+        // 通过 interfaceClass 指定实现的接口
         Class<?> interfaceClass = getAttribute(attributes, "interfaceClass");
 
         if (void.class.equals(interfaceClass)) { // default or set void.class for purpose.
 
             interfaceClass = null;
 
+            // 通过 interfaceName 指定实现的接口
             String interfaceClassName = getAttribute(attributes, "interfaceName");
 
             if (hasText(interfaceClassName)) {
@@ -108,6 +110,7 @@ public class DubboAnnotationUtils {
 
         }
 
+        // 上面都没有配置，则尝试解析出这个类所实现的所有接口，取第一个（也就是实现的首个接口）
         if (interfaceClass == null && defaultInterfaceClass != null) {
             // Find all interfaces from the annotated class
             // To resolve an issue : https://github.com/apache/dubbo/issues/3251

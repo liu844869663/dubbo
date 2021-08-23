@@ -42,6 +42,8 @@ import static org.apache.dubbo.rpc.cluster.Constants.EXPORT_KEY;
 import static org.apache.dubbo.rpc.cluster.Constants.REFER_KEY;
 
 /**
+ * 注册中心工厂对象的抽象类，提供通用的方法
+ * <p>
  * AbstractRegistryFactory. (SPI, Singleton, ThreadSafe)
  *
  * @see org.apache.dubbo.registry.RegistryFactory
@@ -54,9 +56,18 @@ public abstract class AbstractRegistryFactory implements RegistryFactory {
     // The lock for the acquisition process of the registry
     protected static final ReentrantLock LOCK = new ReentrantLock();
 
-    // Registry Collection Map<RegistryAddress, Registry>
+    /**
+     * 缓存注册中心对象
+     * key：{@link URL#toServiceStringWithoutResolving}
+     * 例如 `zookeeper://127.0.0.1:2181/org.apache.dubbo.registry.RegistryService`
+     *
+     * Registry Collection Map<RegistryAddress, Registry>
+     */
     protected static final Map<String, Registry> REGISTRIES = new HashMap<>();
 
+    /**
+     * 标记是否所有的注册中心对象都被销毁
+     */
     private static final AtomicBoolean destroyed = new AtomicBoolean(false);
 
     /**
@@ -125,40 +136,58 @@ public abstract class AbstractRegistryFactory implements RegistryFactory {
     @Override
     public Registry getRegistry(URL url) {
 
+        // 如果所有的注册中心都被销毁了，这里会返回一个默认的 Registry 空实现对象
         Registry defaultNopRegistry = getDefaultNopRegistryIfDestroyed();
         if (null != defaultNopRegistry) {
             return defaultNopRegistry;
         }
 
+        // 重新创建一个 URL 对象
         url = URLBuilder.from(url)
+                // 路径为 RegistryService 类名（原先 url 本身就是）
                 .setPath(RegistryService.class.getName())
+                // 添加 `interface` 接口参数为 RegistryService 类名
                 .addParameter(INTERFACE_KEY, RegistryService.class.getName())
+                // 移除 `export` 参数（服务提供者的信息）
                 .removeParameters(EXPORT_KEY, REFER_KEY)
                 .build();
+        // 获取注册中心的缓存键，`{protocol}://{username}:{password}@{host}:{port}/{group}/{interfaceName}:{version}`
+        // 例如 `zookeeper://127.0.0.1:2181/org.apache.dubbo.registry.RegistryService`
         String key = createRegistryCacheKey(url);
         // Lock the registry access process to ensure a single instance of the registry
+        // 加锁
         LOCK.lock();
         try {
             // double check
             // fix https://github.com/apache/dubbo/issues/7265.
+            // 再次确认注册中心是否都被销毁
             defaultNopRegistry = getDefaultNopRegistryIfDestroyed();
             if (null != defaultNopRegistry) {
                 return defaultNopRegistry;
             }
 
+            // 从缓存中获取对应的 Registry 注册中心对象
             Registry registry = REGISTRIES.get(key);
             if (registry != null) {
                 return registry;
             }
+            /**
+             * 创建一个 Registry 注册中心对象，抽象方法
+             * 不同协议对应不同的子类，创建不同的 Registry 注册中心对象
+             * 例如 `zookeeper` 协议对应 {@link org.apache.dubbo.registry.zookeeper.ZookeeperRegistryFactory}，
+             * 创建 {@link org.apache.dubbo.registry.zookeeper.ZookeeperRegistry} 注册中心对象
+             */
             //create registry by spi/ioc
             registry = createRegistry(url);
             if (registry == null) {
                 throw new IllegalStateException("Can not create registry " + url);
             }
+            // 缓存起来
             REGISTRIES.put(key, registry);
             return registry;
         } finally {
             // Release the lock
+            // 释放锁
             LOCK.unlock();
         }
     }

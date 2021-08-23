@@ -68,6 +68,9 @@ import static org.apache.dubbo.common.constants.CommonConstants.TIMEOUT_KEY;
  */
 public class WebServiceProtocol extends AbstractProxyProtocol {
 
+    /**
+     * 服务器默认端口
+     */
     public static final int DEFAULT_PORT = 80;
 
     private final ExtensionManagerBus bus = new ExtensionManagerBus();

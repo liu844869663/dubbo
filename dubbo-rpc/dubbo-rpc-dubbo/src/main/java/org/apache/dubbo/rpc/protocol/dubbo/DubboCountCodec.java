@@ -33,31 +33,44 @@ import static org.apache.dubbo.rpc.Constants.OUTPUT_KEY;
 
 public final class DubboCountCodec implements Codec2 {
 
+    /**
+     * 编解码器
+     */
     private DubboCodec codec = new DubboCodec();
 
     @Override
     public void encode(Channel channel, ChannelBuffer buffer, Object msg) throws IOException {
+        // 编码
         codec.encode(channel, buffer, msg);
     }
 
     @Override
     public Object decode(Channel channel, ChannelBuffer buffer) throws IOException {
+        // 记录当前
         int save = buffer.readerIndex();
+        // 创建一个 MultiMessage 对象
         MultiMessage result = MultiMessage.create();
         do {
+            // 解码
             Object obj = codec.decode(channel, buffer);
+            // 输入不够，重新读取进度
             if (Codec2.DecodeResult.NEED_MORE_INPUT == obj) {
                 buffer.readerIndex(save);
                 break;
-            } else {
+            } else { // 否则，解析到消息
+                // 将解析结果添加到消息对象中
                 result.addMessage(obj);
+                // 记录消息长度到隐式参数集合，用于 MonitorFilter 监控
                 logMessageLength(obj, buffer.readerIndex() - save);
+                // 记录当前读位置
                 save = buffer.readerIndex();
             }
         } while (true);
+        // 如果没有读取到消息，则返回一个枚举对象，表示需要更多的输入
         if (result.isEmpty()) {
             return Codec2.DecodeResult.NEED_MORE_INPUT;
         }
+        // 返回读取到的消息
         if (result.size() == 1) {
             return result.get(0);
         }

@@ -34,6 +34,8 @@ public abstract class AbstractServiceDiscoveryFactory implements ServiceDiscover
 
     @Override
     public ServiceDiscovery getServiceDiscovery(URL registryURL) {
+        // 获取注册中心的缓存键，`{protocol}://{username}:{password}@{host}:{port}/{group}/{interfaceName}:{version}`
+        // 例如 `zookeeper://127.0.0.1:2181/org.apache.dubbo.registry.RegistryService`
         String key = registryURL.toServiceStringWithoutResolving();
         return discoveries.computeIfAbsent(key, k -> createDiscovery(registryURL));
     }

@@ -50,20 +50,26 @@ public class ActiveLimitFilter implements Filter, Filter.Listener {
     public Result invoke(Invoker<?> invoker, Invocation invocation) throws RpcException {
         URL url = invoker.getUrl();
         String methodName = invocation.getMethodName();
+        // 获得服务提供者每服务每方法最大可并行执行请求数
         int max = invoker.getUrl().getMethodParameter(methodName, ACTIVES_KEY, 0);
+        // 获得 RpcStatus 对象，基于服务 URL + 方法维度
         final RpcStatus rpcStatus = RpcStatus.getStatus(invoker.getUrl(), invocation.getMethodName());
         if (!RpcStatus.beginCount(url, methodName, max)) {
+            // 获得超时值
             long timeout = invoker.getUrl().getMethodParameter(invocation.getMethodName(), TIMEOUT_KEY, 0);
             long start = System.currentTimeMillis();
             long remain = timeout;
             synchronized (rpcStatus) {
+                // 调用开始的计数，如果超过最大可并行执行请求数，等待
                 while (!RpcStatus.beginCount(url, methodName, max)) {
                     try {
+                        // 等待，直到超时，或者被唤醒
                         rpcStatus.wait(remain);
                     } catch (InterruptedException e) {
                         // ignore
                     }
-                    long elapsed = System.currentTimeMillis() - start;
+                    // 判断是否没有剩余时长了，抛出 RpcException 异常
+                    long elapsed = System.currentTimeMillis() - start; // 本地等待时长
                     remain = timeout - elapsed;
                     if (remain <= 0) {
                         throw new RpcException(RpcException.LIMIT_EXCEEDED_EXCEPTION,
@@ -78,6 +84,7 @@ public class ActiveLimitFilter implements Filter, Filter.Listener {
 
         invocation.put(ACTIVELIMIT_FILTER_START_TIME, System.currentTimeMillis());
 
+        // 服务调用
         return invoker.invoke(invocation);
     }
 

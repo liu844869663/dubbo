@@ -165,6 +165,7 @@ public class UrlUtils {
         if (address == null || address.length() == 0) {
             return null;
         }
+        // 使用 | 或者 ; 对地址进行分隔
         String[] addresses = REGISTRY_SPLIT_PATTERN.split(address);
         if (addresses == null || addresses.length == 0) {
             return null; //here won't be empty

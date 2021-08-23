@@ -63,13 +63,17 @@ public class ForkingClusterInvoker<T> extends AbstractClusterInvoker<T> {
     @SuppressWarnings({"unchecked", "rawtypes"})
     public Result doInvoke(final Invocation invocation, List<Invoker<T>> invokers, LoadBalance loadbalance) throws RpcException {
         try {
+            // 如果 invokers 为空则抛出异常，表示没有服务提供者
             checkInvokers(invokers, invocation);
             final List<Invoker<T>> selected;
+            // 并行数量，默认 2 个
             final int forks = getUrl().getParameter(FORKS_KEY, DEFAULT_FORKS);
             final int timeout = getUrl().getParameter(TIMEOUT_KEY, DEFAULT_TIMEOUT);
+            // 获取需要同时调用的 Invoker 对象
             if (forks <= 0 || forks >= invokers.size()) {
+                // 并行数量小于等于 0，或者大于服务提供者总数，则直接使用所有
                 selected = invokers;
-            } else {
+            } else { // 否则，选取指定个数的 Invoker 对象
                 selected = new ArrayList<>(forks);
                 while (selected.size() < forks) {
                     Invoker<T> invoker = select(loadbalance, invocation, invokers, selected);
@@ -79,16 +83,22 @@ public class ForkingClusterInvoker<T> extends AbstractClusterInvoker<T> {
                     }
                 }
             }
+            // 往上下文中将这些服务提供者的 URL 对象保存起来
             RpcContext.getContext().setInvokers((List) selected);
             final AtomicInteger count = new AtomicInteger();
             final BlockingQueue<Object> ref = new LinkedBlockingQueue<>();
+            // 在线程池中对这些 Invoker 进行 RPC 调用
             for (final Invoker<T> invoker : selected) {
                 executor.execute(() -> {
                     try {
+                        // PRC 调用
                         Result result = invoker.invoke(invocation);
+                        // 放入阻塞队列中
                         ref.offer(result);
                     } catch (Throwable e) {
+                        // 异常计数器加一
                         int value = count.incrementAndGet();
+                        // 若 RPC 调用结果都是异常，则添加异常到 `ref` 阻塞队列
                         if (value >= selected.size()) {
                             ref.offer(e);
                         }
@@ -96,11 +106,14 @@ public class ForkingClusterInvoker<T> extends AbstractClusterInvoker<T> {
                 });
             }
             try {
+                // 从 `ref` 队列中，阻塞等待结果
                 Object ret = ref.poll(timeout, TimeUnit.MILLISECONDS);
+                // 若是异常结果，抛出 RpcException 异常
                 if (ret instanceof Throwable) {
                     Throwable e = (Throwable) ret;
                     throw new RpcException(e instanceof RpcException ? ((RpcException) e).getCode() : 0, "Failed to forking invoke provider " + selected + ", but no luck to perform the invocation. Last error is: " + e.getMessage(), e.getCause() != null ? e.getCause() : e);
                 }
+                // 若是正常结果，直接返回
                 return (Result) ret;
             } catch (InterruptedException e) {
                 throw new RpcException("Failed to forking invoke provider " + selected + ", but no luck to perform the invocation. Last error is: " + e.getMessage(), e);

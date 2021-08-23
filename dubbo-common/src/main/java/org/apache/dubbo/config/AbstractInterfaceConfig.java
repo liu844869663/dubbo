@@ -177,6 +177,8 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
 
     /**
      * The url of the reference service
+     * {@link ServiceConfig} 保存 Dubbo 服务提供者的 URL 对象
+     * {@link ReferenceConfig} 保存 Dubbo 服务消费者的 URL 对象
      */
     protected final List<URL> urls = new ArrayList<URL>();
 

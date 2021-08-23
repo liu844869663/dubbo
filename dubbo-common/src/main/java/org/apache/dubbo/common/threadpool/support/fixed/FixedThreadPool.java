@@ -45,9 +45,13 @@ public class FixedThreadPool implements ThreadPool {
 
     @Override
     public Executor getExecutor(URL url) {
+        // 获取 `threadname` 线程池名称
         String name = url.getParameter(THREAD_NAME_KEY, DEFAULT_THREAD_NAME);
+        // 获取 `threads` 线程池大小，默认 200 个
         int threads = url.getParameter(THREADS_KEY, DEFAULT_THREADS);
+        // 获取 `queues` 线程池队列大小，默认 0
         int queues = url.getParameter(QUEUES_KEY, DEFAULT_QUEUES);
+        // 创建一个线程池，设置核心线程数和最大线程数都是 200 个，固定好大小
         return new ThreadPoolExecutor(threads, threads, 0, TimeUnit.MILLISECONDS,
                 queues == 0 ? new SynchronousQueue<Runnable>() :
                         (queues < 0 ? new LinkedBlockingQueue<Runnable>()

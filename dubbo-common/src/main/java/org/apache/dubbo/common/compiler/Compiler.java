@@ -20,17 +20,21 @@ import org.apache.dubbo.common.compiler.support.JavassistCompiler;
 import org.apache.dubbo.common.extension.SPI;
 
 /**
+ * 编译器接口，默认使用 javassist 实现的编译器
+ * <p>
  * Compiler. (SPI, Singleton, ThreadSafe)
  */
 @SPI(JavassistCompiler.NAME)
 public interface Compiler {
 
     /**
+     * 编译 Java 代码字符串
+     * <p>
      * Compile java source code.
      *
      * @param code        Java source code
      * @param classLoader classloader
-     * @return Compiled class
+     * @return Compiled class 编译后的 Class 对象
      */
     Class<?> compile(String code, ClassLoader classLoader);
 

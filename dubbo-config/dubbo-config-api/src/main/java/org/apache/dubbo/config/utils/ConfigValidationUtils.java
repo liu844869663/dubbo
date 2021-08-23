@@ -186,23 +186,34 @@ public class ConfigValidationUtils {
     public static List<URL> loadRegistries(AbstractInterfaceConfig interfaceConfig, boolean provider) {
         // check && override if necessary
         List<URL> registryList = new ArrayList<URL>();
+        // 获取 Application 应用配置
         ApplicationConfig application = interfaceConfig.getApplication();
+        // 获取注册中心配置列表，通常配置一个
         List<RegistryConfig> registries = interfaceConfig.getRegistries();
         if (CollectionUtils.isNotEmpty(registries)) {
             for (RegistryConfig config : registries) {
+                // 获取注册中心的地址
                 String address = config.getAddress();
                 if (StringUtils.isEmpty(address)) {
                     address = ANYHOST_VALUE;
                 }
                 if (!RegistryConfig.NO_AVAILABLE.equalsIgnoreCase(address)) {
                     Map<String, String> map = new HashMap<String, String>();
+                    // 获取应用级别的配置，例如 `application=demo&qos.enable=false`
                     AbstractConfig.appendParameters(map, application);
+                    // 获取注册中心的配置，例如 `protocol=zookeeper&port=2181`
                     AbstractConfig.appendParameters(map, config);
+                    // 添加 `path=org.apache.dubbo.registry.RegistryService` 参数
                     map.put(PATH_KEY, RegistryService.class.getName());
+                    // 添加运行时参数，`dubbo=2.0.2&release=2.7.8&timestamp=当前时间戳&pid=当前进程号` 参数
                     AbstractInterfaceConfig.appendRuntimeParameters(map);
+                    // 如果没有协议，则默认使用 dubbo 协议，注册中心需要指定
                     if (!map.containsKey(PROTOCOL_KEY)) {
                         map.put(PROTOCOL_KEY, DUBBO_PROTOCOL);
                     }
+                    // 将注册中心的这些信息封装成 URL 对象
+                    // 因为 address 可以通过 | 分隔不同的注册中心，所以这里可能得到多个
+                    // 例如，这里得到 `zookeeper://127.0.0.1:2181/org.apache.dubbo.registry.RegistryService?application=demo-provider&dubbo=2.0.2&pid=21100&release=2.7.8&timestamp=1627003234595`
                     List<URL> urls = UrlUtils.parseURLs(address, map);
 
                     if (urls == null) {
@@ -210,18 +221,25 @@ public class ConfigValidationUtils {
                     }
                     for (URL url : urls) {
 
+                        // 根据注册中心的 URL 对象重新成一个 URL 对象，有以下变动：
+                        // protocol 改为 registry
+                        // 往参数中添加 registry=zookeeper（注册中心的名称）
+                        // 例如，这里得到 `registry://127.0.0.1:2181/org.apache.dubbo.registry.RegistryService?application=demo-provider&dubbo=2.0.2&pid=21100&registry=zookeeper&release=2.7.8&timestamp=1627003234595`
                         url = URLBuilder.from(url)
                                 .addParameter(REGISTRY_KEY, url.getProtocol())
                                 .setProtocol(extractRegistryType(url))
                                 .build();
-                        if ((provider && url.getParameter(REGISTER_KEY, true))
-                                || (!provider && url.getParameter(SUBSCRIBE_KEY, true))) {
+                        if ((provider && url.getParameter(REGISTER_KEY, true)) // 如果是服务提供者，没有配置 register=false（不注册）
+                                || (!provider && url.getParameter(SUBSCRIBE_KEY, true))) // 或者如果是服务消费者，没有配置 subscribe=false（不订阅）
+                        {
+                            // 表示需要使用到这个注册中心
                             registryList.add(url);
                         }
                     }
                 }
             }
         }
+        // 返回这些注册中心所对应的 URL 们，这里对服务提供者进行了额外判断
         return genCompatibleRegistries(registryList, provider);
     }
 

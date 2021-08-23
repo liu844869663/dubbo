@@ -37,6 +37,8 @@ import java.util.List;
 public interface LoadBalance {
 
     /**
+     * 从 Invoker 集合中根据不同的负载均衡策略选择一个 Invoker 对象
+     * <p>
      * select one invoker in list.
      *
      * @param invokers   invokers.

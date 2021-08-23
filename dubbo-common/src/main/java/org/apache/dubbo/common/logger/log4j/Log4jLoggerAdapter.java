@@ -34,15 +34,19 @@ public class Log4jLoggerAdapter implements LoggerAdapter {
     @SuppressWarnings("unchecked")
     public Log4jLoggerAdapter() {
         try {
+            // 获得 Root Logger 对象
             org.apache.log4j.Logger logger = LogManager.getRootLogger();
             if (logger != null) {
+                // 循环每个 Logger 对象的 Appender 对象
                 Enumeration<Appender> appenders = logger.getAllAppenders();
                 if (appenders != null) {
                     while (appenders.hasMoreElements()) {
+                        // 当且仅当 FileAppender 时
                         Appender appender = appenders.nextElement();
                         if (appender instanceof FileAppender) {
                             FileAppender fileAppender = (FileAppender) appender;
                             String filename = fileAppender.getFile();
+                            // 创建一个日志文件
                             file = new File(filename);
                             break;
                         }

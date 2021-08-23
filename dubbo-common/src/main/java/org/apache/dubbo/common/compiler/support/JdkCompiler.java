@@ -51,6 +51,8 @@ import java.util.Map;
 import java.util.Set;
 
 /**
+ * 基于 JDK 实现的编译器
+ *
  * JdkCompiler. (SPI, Singleton, ThreadSafe)
  */
 public class JdkCompiler extends AbstractCompiler {

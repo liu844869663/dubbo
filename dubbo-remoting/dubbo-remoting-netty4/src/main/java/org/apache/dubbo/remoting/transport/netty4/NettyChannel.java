@@ -37,6 +37,8 @@ import static org.apache.dubbo.common.constants.CommonConstants.DEFAULT_TIMEOUT;
 import static org.apache.dubbo.common.constants.CommonConstants.TIMEOUT_KEY;
 
 /**
+ * 封装 Netty Channel 的通道实现类
+ * <p>
  * NettyChannel maintains the cache of channel.
  */
 final class NettyChannel extends AbstractChannel {
@@ -44,6 +46,8 @@ final class NettyChannel extends AbstractChannel {
     private static final Logger logger = LoggerFactory.getLogger(NettyChannel.class);
     /**
      * the cache for netty channel and dubbo channel
+     * <p>
+     * NettyChannel 是 netty channel 的装饰器
      */
     private static final ConcurrentMap<Channel, NettyChannel> CHANNEL_MAP = new ConcurrentHashMap<Channel, NettyChannel>();
     /**
@@ -51,8 +55,14 @@ final class NettyChannel extends AbstractChannel {
      */
     private final Channel channel;
 
+    /**
+     * 属性集合
+     */
     private final Map<String, Object> attributes = new ConcurrentHashMap<String, Object>();
 
+    /**
+     * 是否处于连接中
+     */
     private final AtomicBoolean active = new AtomicBoolean(false);
 
     /**
@@ -84,11 +94,15 @@ final class NettyChannel extends AbstractChannel {
         if (ch == null) {
             return null;
         }
+        // 缓存中获取 netty channel 对应的 dubbo channel
         NettyChannel ret = CHANNEL_MAP.get(ch);
         if (ret == null) {
+            // 缓存未名则创建一个 NettyChannel 对象，封装 netty channel 等信息
             NettyChannel nettyChannel = new NettyChannel(ch, url, handler);
-            if (ch.isActive()) {
+            if (ch.isActive()) { // 如果 netty channel 处于激活中
+                // 标记这个 dubbo channel 也处于激活中
                 nettyChannel.markActive(true);
+                // 放入缓存
                 ret = CHANNEL_MAP.putIfAbsent(ch, nettyChannel);
             }
             if (ret == null) {
@@ -145,6 +159,8 @@ final class NettyChannel extends AbstractChannel {
     }
 
     /**
+     * 发现消息至远程的服务端或者客户端
+     *
      * Send message by netty and whether to wait the completion of the send.
      *
      * @param message message that need send.
@@ -154,25 +170,32 @@ final class NettyChannel extends AbstractChannel {
     @Override
     public void send(Object message, boolean sent) throws RemotingException {
         // whether the channel is closed
+        // 判断是否已被关闭
         super.send(message, sent);
 
         boolean success = true;
         int timeout = 0;
         try {
+            // 通过 netty channel 向远程发送数据
             ChannelFuture future = channel.writeAndFlush(message);
+            // 如果需要等待发送成功
             if (sent) {
                 // wait timeout ms
                 timeout = getUrl().getPositiveParameter(TIMEOUT_KEY, DEFAULT_TIMEOUT);
+                // 等待发送成功，默认超时时间 1s
                 success = future.await(timeout);
             }
+            // 若发生异常，则抛出
             Throwable cause = future.cause();
             if (cause != null) {
                 throw cause;
             }
         } catch (Throwable e) {
+            // 如果 netty channel 断开连接，则从 NettyChannel 缓存中移除
             removeChannelIfDisconnected(channel);
             throw new RemotingException(this, "Failed to send message " + PayloadDropper.getRequestWithoutData(message) + " to " + getRemoteAddress() + ", cause: " + e.getMessage(), e);
         }
+        // 如果没有发送成功，则抛出异常
         if (!success) {
             throw new RemotingException(this, "Failed to send message " + PayloadDropper.getRequestWithoutData(message) + " to " + getRemoteAddress()
                     + "in timeout(" + timeout + "ms) limit");
@@ -182,16 +205,19 @@ final class NettyChannel extends AbstractChannel {
     @Override
     public void close() {
         try {
+            // 标记为已关闭
             super.close();
         } catch (Exception e) {
             logger.warn(e.getMessage(), e);
         }
         try {
+            // 如果 netty channel 断开连接，则从 NettyChannel 缓存中移除
             removeChannelIfDisconnected(channel);
         } catch (Exception e) {
             logger.warn(e.getMessage(), e);
         }
         try {
+            // 清除属性
             attributes.clear();
         } catch (Exception e) {
             logger.warn(e.getMessage(), e);
@@ -200,6 +226,7 @@ final class NettyChannel extends AbstractChannel {
             if (logger.isInfoEnabled()) {
                 logger.info("Close netty channel " + channel);
             }
+            // 关闭 netty channel
             channel.close();
         } catch (Exception e) {
             logger.warn(e.getMessage(), e);

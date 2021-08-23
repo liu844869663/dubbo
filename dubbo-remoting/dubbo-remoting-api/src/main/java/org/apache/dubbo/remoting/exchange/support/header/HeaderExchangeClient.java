@@ -41,26 +41,47 @@ import static org.apache.dubbo.remoting.utils.UrlUtils.getHeartbeat;
 import static org.apache.dubbo.remoting.utils.UrlUtils.getIdleTimeout;
 
 /**
+ * 基于消息头部( Header )的信息交换客户端实现类
+ * <p>
  * DefaultMessageClient
  */
 public class HeaderExchangeClient implements ExchangeClient {
 
+    /**
+     * 客户端
+     */
     private final Client client;
+    /**
+     * 信息交换通道
+     */
     private final ExchangeChannel channel;
 
+    /**
+     * 任务执行器
+     */
     private static final HashedWheelTimer IDLE_CHECK_TIMER = new HashedWheelTimer(
             new NamedThreadFactory("dubbo-client-idleCheck", true), 1, TimeUnit.SECONDS, TICKS_PER_WHEEL);
+    /**
+     * 心跳任务定时器
+     */
     private HeartbeatTimerTask heartBeatTimerTask;
+    /**
+     * 重连任务定时器
+     */
     private ReconnectTimerTask reconnectTimerTask;
 
     public HeaderExchangeClient(Client client, boolean startTimer) {
         Assert.notNull(client, "Client can't be null");
         this.client = client;
+        // 将这个客户端对象，封装成 HeaderExchangeChannel 信息交换通道
         this.channel = new HeaderExchangeChannel(client);
 
         if (startTimer) {
             URL url = client.getUrl();
+            // 开启重连的任务
             startReconnectTask(url);
+            // 开启心跳检查的任务
+            // 心跳间隔，对于长连接，当物理层断开时，比如拔网线，TCP的FIN消息来不及发送，对方收不到断开事件，此时需要心跳来帮助检查连接是否已断开
             startHeartBeatTask(url);
         }
     }
@@ -139,8 +160,11 @@ public class HeaderExchangeClient implements ExchangeClient {
     @Override
     public void close(int timeout) {
         // Mark the client into the closure process
+        // 先设置一个正在关闭标记状态
         startClose();
+        // 取消心跳和重连任务
         doClose();
+        // 关闭通道，先等待所有请求完成，或者超过最大等待时间，然后在关闭 netty 相关组件
         channel.close(timeout);
     }
 
@@ -187,21 +211,29 @@ public class HeaderExchangeClient implements ExchangeClient {
     }
 
     private void startHeartBeatTask(URL url) {
-        if (!client.canHandleIdle()) {
+        if (!client.canHandleIdle()) { // 是否能够感知或者处理一个空闲连接，netty 可以
+            // 获取需要心跳检测的通道，也就是当前对象
             AbstractTimerTask.ChannelProvider cp = () -> Collections.singletonList(HeaderExchangeClient.this);
+            // 心跳检测时间间隔，默认 60*1000 ms
             int heartbeat = getHeartbeat(url);
             long heartbeatTick = calculateLeastDuration(heartbeat);
+            // 创建一个心跳检测的任务
             this.heartBeatTimerTask = new HeartbeatTimerTask(cp, heartbeatTick, heartbeat);
+            // 将这个任务防止定时器中
             IDLE_CHECK_TIMER.newTimeout(heartBeatTimerTask, heartbeatTick, TimeUnit.MILLISECONDS);
         }
     }
 
     private void startReconnectTask(URL url) {
-        if (shouldReconnect(url)) {
+        if (shouldReconnect(url)) { // 需要重连，默认为 `true`
+            // 获取需要重新连接的通道，也就是当前对象
             AbstractTimerTask.ChannelProvider cp = () -> Collections.singletonList(HeaderExchangeClient.this);
+            // 获取空闲时间，也就是这个长连接空闲时间超过多久需要重连一下，默认取心跳检测时间的 3 倍，也就是 3*60*1000 ms，三分钟
             int idleTimeout = getIdleTimeout(url);
             long heartbeatTimeoutTick = calculateLeastDuration(idleTimeout);
+            // 创建一个重连任务
             this.reconnectTimerTask = new ReconnectTimerTask(cp, heartbeatTimeoutTick, idleTimeout);
+            // 将这个任务防止定时器中
             IDLE_CHECK_TIMER.newTimeout(reconnectTimerTask, heartbeatTimeoutTick, TimeUnit.MILLISECONDS);
         }
     }

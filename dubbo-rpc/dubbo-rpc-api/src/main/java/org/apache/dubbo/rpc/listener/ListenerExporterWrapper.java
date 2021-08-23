@@ -32,8 +32,14 @@ public class ListenerExporterWrapper<T> implements Exporter<T> {
 
     private static final Logger logger = LoggerFactory.getLogger(ListenerExporterWrapper.class);
 
+    /**
+     * 被包装的 Export 对象
+     */
     private final Exporter<T> exporter;
 
+    /**
+     * Export 监听器数组
+     */
     private final List<ExporterListener> listeners;
 
     public ListenerExporterWrapper(Exporter<T> exporter, List<ExporterListener> listeners) {
@@ -42,6 +48,7 @@ public class ListenerExporterWrapper<T> implements Exporter<T> {
         }
         this.exporter = exporter;
         this.listeners = listeners;
+        // 执行 Export 监听器
         if (CollectionUtils.isNotEmpty(listeners)) {
             RuntimeException exception = null;
             for (ExporterListener listener : listeners) {
@@ -72,6 +79,7 @@ public class ListenerExporterWrapper<T> implements Exporter<T> {
         } finally {
             if (CollectionUtils.isNotEmpty(listeners)) {
                 RuntimeException exception = null;
+                // 执行 Export 监听器
                 for (ExporterListener listener : listeners) {
                     if (listener != null) {
                         try {

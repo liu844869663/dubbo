@@ -42,7 +42,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * <p>
  *
  */
-
 public class ApplicationModel {
     protected static final Logger LOGGER = LoggerFactory.getLogger(ApplicationModel.class);
     public static final String NAME = "application";
@@ -75,24 +74,38 @@ public class ApplicationModel {
         return getServiceRepository().lookupReferredService(serviceKey);
     }
 
+    /**
+     * FrameworkExt 扩展点实现类的加载器
+     */
     private static final ExtensionLoader<FrameworkExt> LOADER = ExtensionLoader.getExtensionLoader(FrameworkExt.class);
 
     public static void initFrameworkExts() {
+        /**
+         * Dubbo SPI 获取所有的 FrameworkExt 框架扩展类
+         *
+         * @see ConfigManager 配置管理器
+         * @see Environment 环境信息
+         * @see ServiceRepository 服务仓储
+         */
         Set<FrameworkExt> exts = ExtensionLoader.getExtensionLoader(FrameworkExt.class).getSupportedExtensionInstances();
         for (FrameworkExt ext : exts) {
+            // 初始化 Environment，读取配置中心的配置
             ext.initialize();
         }
     }
 
     public static Environment getEnvironment() {
+        // 获取 `environment` 名称的 FrameworkExt 扩展点实现类，也就是 Environment 对象
         return (Environment) LOADER.getExtension(Environment.NAME);
     }
 
     public static ConfigManager getConfigManager() {
+        // 获取 `config` 名称的 FrameworkExt 扩展点实现类，也就是 ConfigManager 对象
         return (ConfigManager) LOADER.getExtension(ConfigManager.NAME);
     }
 
     public static ServiceRepository getServiceRepository() {
+        // 获取 `repository` 名称的 FrameworkExt 扩展点实现类，也就是 ServiceRepository 对象
         return (ServiceRepository) LOADER.getExtension(ServiceRepository.NAME);
     }
 

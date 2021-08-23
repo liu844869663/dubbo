@@ -21,11 +21,16 @@ import org.apache.dubbo.common.extension.Adaptive;
 import org.apache.dubbo.common.extension.ExtensionLoader;
 
 /**
+ * Compiler 扩展点实现类的自适应对象，因为添加了 `@Adaptive` 注解
+ *
  * AdaptiveCompiler. (SPI, Singleton, ThreadSafe)
  */
 @Adaptive
 public class AdaptiveCompiler implements Compiler {
 
+    /**
+     * 指定的编译器名称，可通过 `<dubbo:application compiler="javassist" />` 指定
+     */
     private static volatile String DEFAULT_COMPILER;
 
     public static void setDefaultCompiler(String compiler) {
@@ -35,13 +40,17 @@ public class AdaptiveCompiler implements Compiler {
     @Override
     public Class<?> compile(String code, ClassLoader classLoader) {
         Compiler compiler;
+        // 获取 Compiler 对应的 ExtensionLoader 对象
         ExtensionLoader<Compiler> loader = ExtensionLoader.getExtensionLoader(Compiler.class);
         String name = DEFAULT_COMPILER; // copy reference
+        // 如果设置了编译器名称，则加载指定的 Compiler 编译器
         if (name != null && name.length() > 0) {
             compiler = loader.getExtension(name);
         } else {
+            // 否则，使用默认的编译器，也就是基于 javassist 实现
             compiler = loader.getDefaultExtension();
         }
+        // 使用编译器编译这个 Java 代码的字符串成 Class 对象
         return compiler.compile(code, classLoader);
     }
 

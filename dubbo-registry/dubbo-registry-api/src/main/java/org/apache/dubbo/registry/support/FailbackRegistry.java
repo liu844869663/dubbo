@@ -42,33 +42,63 @@ import static org.apache.dubbo.registry.Constants.DEFAULT_REGISTRY_RETRY_PERIOD;
 import static org.apache.dubbo.registry.Constants.REGISTRY_RETRY_PERIOD_KEY;
 
 /**
+ * 继承 AbstractRegistry 抽象类，支持连接失败后重试的注册中心抽象类
+ *
  * FailbackRegistry. (SPI, Prototype, ThreadSafe)
  */
 public abstract class FailbackRegistry extends AbstractRegistry {
 
-    /*  retry task map */
-
+    /**
+     * retry task map
+     *
+     * 保存注册失败时重新注册的任务
+     * key：服务对应的 URL 对象
+     * value：重新注册服务的任务，注册成功后会将这里缓存的任务删除
+     */
     private final ConcurrentMap<URL, FailedRegisteredTask> failedRegistered = new ConcurrentHashMap<URL, FailedRegisteredTask>();
 
+    /**
+     * 保存取消注册失败时取消注册的任务
+     * key：服务对应的 URL 对象
+     * value：失败时取消注册的任务，取消注册成功后会将这里缓存的任务删除
+     */
     private final ConcurrentMap<URL, FailedUnregisteredTask> failedUnregistered = new ConcurrentHashMap<URL, FailedUnregisteredTask>();
 
+    /**
+     * 保存订阅失败时重新订阅的任务
+     * key：持有需要订阅的 URL 对象和 NotifyListener 监听器
+     * value：重新订阅的任务，订阅成功后会将这里缓存的任务删除
+     */
     private final ConcurrentMap<Holder, FailedSubscribedTask> failedSubscribed = new ConcurrentHashMap<Holder, FailedSubscribedTask>();
 
+    /**
+     * 取消订阅失败时重新取消订阅的任务
+     * key：持有需要取消订阅的 URL 对象和 NotifyListener 监听器
+     * value：取消订阅的任务，取消订阅后会将这里缓存的任务删除
+     */
     private final ConcurrentMap<Holder, FailedUnsubscribedTask> failedUnsubscribed = new ConcurrentHashMap<Holder, FailedUnsubscribedTask>();
 
     /**
+     * 连接注册中心失败的重试策略
+     *
      * The time in milliseconds the retryExecutor will wait
      */
     private final int retryPeriod;
 
-    // Timer for failure retry, regular check if there is a request for failure, and if there is, an unlimited retry
+    /**
+     * 失败重试的D
+     *
+     * Timer for failure retry, regular check if there is a request for failure, and if there is, an unlimited retry
+     */
     private final HashedWheelTimer retryTimer;
 
     public FailbackRegistry(URL url) {
         super(url);
+        // 设置重试策略，默认 5s
         this.retryPeriod = url.getParameter(REGISTRY_RETRY_PERIOD_KEY, DEFAULT_REGISTRY_RETRY_PERIOD);
 
         // since the retry task will not be very much. 128 ticks is enough.
+        // 创建一个失败重试的任务执行器，最多支持 128 个任务
         retryTimer = new HashedWheelTimer(new NamedThreadFactory("DubboRegistryRetryTimer", true), retryPeriod, TimeUnit.MILLISECONDS, 128);
     }
 
@@ -91,14 +121,17 @@ public abstract class FailbackRegistry extends AbstractRegistry {
     }
 
     private void addFailedRegistered(URL url) {
+        // 判断是否已有失败时重新注册的任务
         FailedRegisteredTask oldOne = failedRegistered.get(url);
         if (oldOne != null) {
             return;
         }
+        // 新创建一个并放入缓存中
         FailedRegisteredTask newTask = new FailedRegisteredTask(url, this);
         oldOne = failedRegistered.putIfAbsent(url, newTask);
         if (oldOne == null) {
             // never has a retry task. then start a new task for retry.
+            // 将这个任务添加至这个失败重试的任务执行器中
             retryTimer.newTimeout(newTask, retryPeriod, TimeUnit.MILLISECONDS);
         }
     }
@@ -131,15 +164,20 @@ public abstract class FailbackRegistry extends AbstractRegistry {
     }
 
     protected void addFailedSubscribed(URL url, NotifyListener listener) {
+        // 构建一个对象封装 URL 和 NotifyListener
         Holder h = new Holder(url, listener);
+        // 从缓存中获取失败时重新订阅的任务
         FailedSubscribedTask oldOne = failedSubscribed.get(h);
+        // 缓存中已有则直接返回
         if (oldOne != null) {
             return;
         }
+        // 创建一个失败时重新订阅的任务
         FailedSubscribedTask newTask = new FailedSubscribedTask(url, this, listener);
         oldOne = failedSubscribed.putIfAbsent(h, newTask);
         if (oldOne == null) {
             // never has a retry task. then start a new task for retry.
+            // 将这个任务添加至这个失败重试的任务执行器中
             retryTimer.newTimeout(newTask, retryPeriod, TimeUnit.MILLISECONDS);
         }
     }
@@ -198,16 +236,25 @@ public abstract class FailbackRegistry extends AbstractRegistry {
             logger.info("URL " + url + " will not be registered to Registry. Registry " + url + " does not accept service of this protocol type.");
             return;
         }
+        // 将这个 URL 保存至已注册的 URL 集合中
         super.register(url);
+        // 移除对应的失败时重新注册的任务
         removeFailedRegistered(url);
+        // 移除对应的失败时下线的任务
         removeFailedUnregistered(url);
         try {
             // Sending a registration request to the server side
+            /*
+             * 向注册中心注册这个服务
+             * 例如 zk 会通过 zk 客户端创建一个 `/分组名称(默认为dubbo)/服务名称/providers/服务提供者的所有信息` 路径
+             * 除了最后的 `服务提供者的所有信息` 节点是临时节点，其他的都是永久节点，不会消失
+             */
             doRegister(url);
         } catch (Exception e) {
             Throwable t = e;
 
             // If the startup detection is opened, the Exception is thrown directly.
+            // 注册中心是否检查，服务是否检查，不是消费者
             boolean check = getUrl().getParameter(Constants.CHECK_KEY, true)
                     && url.getParameter(Constants.CHECK_KEY, true)
                     && !CONSUMER_PROTOCOL.equals(url.getProtocol());
@@ -222,6 +269,7 @@ public abstract class FailbackRegistry extends AbstractRegistry {
             }
 
             // Record a failed registration request to a failed list, retry regularly
+            // 添加一个失败时重新注册的任务
             addFailedRegistered(url);
         }
     }
@@ -292,15 +340,21 @@ public abstract class FailbackRegistry extends AbstractRegistry {
 
     @Override
     public void subscribe(URL url, NotifyListener listener) {
+        // 将这个 URL 和 NotifyListener 保存至已订阅缓存中
         super.subscribe(url, listener);
+        // 移除订阅失败时重新订阅的任务，并取消这个任务
+        // 移除取消订阅失败时重新取消订阅的任务，并取消这个任务
         removeFailedSubscribed(url, listener);
         try {
             // Sending a subscription request to the server side
+            // 向注册中心订阅这个 url 对象，并设置 NotifyListener 回调监听器
             doSubscribe(url, listener);
         } catch (Exception e) {
             Throwable t = e;
 
+            // 尝试从本地缓存文件中获取订阅的信息
             List<URL> urls = getCacheUrls(url);
+            // 如果本地缓存中有，则触发回调监听器
             if (CollectionUtils.isNotEmpty(urls)) {
                 notify(url, listener, urls);
                 logger.error("Failed to subscribe " + url + ", Using cached list: " + urls + " from cache file: " + getUrl().getParameter(FILE_KEY, System.getProperty("user.home") + "/dubbo-registry-" + url.getHost() + ".cache") + ", cause: " + t.getMessage(), t);
@@ -320,6 +374,7 @@ public abstract class FailbackRegistry extends AbstractRegistry {
             }
 
             // Record a failed registration request to a failed list, retry regularly
+            // 添加一个失败时重新订阅的任务
             addFailedSubscribed(url, listener);
         }
     }
@@ -369,25 +424,32 @@ public abstract class FailbackRegistry extends AbstractRegistry {
     }
 
     protected void doNotify(URL url, NotifyListener listener, List<URL> urls) {
+        // 调用父类的回调处理方法
         super.notify(url, listener, urls);
     }
 
     @Override
     protected void recover() throws Exception {
         // register
+        // 获取已注册的 URL 们
         Set<URL> recoverRegistered = new HashSet<URL>(getRegistered());
         if (!recoverRegistered.isEmpty()) {
             if (logger.isInfoEnabled()) {
                 logger.info("Recover register url " + recoverRegistered);
             }
+            // 遍历所有已注册过服务，重新注册
             for (URL url : recoverRegistered) {
                 // remove fail registry or unRegistry task first.
+                // 取消失败时重新注册的任务
                 removeFailedRegistered(url);
+                // 取消失败时重新下线的任务
                 removeFailedUnregistered(url);
+                // 创建并启动一个失败时重新注册的任务，去注册这个服务提供者
                 addFailedRegistered(url);
             }
         }
         // subscribe
+        // 获取需要订阅的提供者们
         Map<URL, Set<NotifyListener>> recoverSubscribed = new HashMap<URL, Set<NotifyListener>>(getSubscribed());
         if (!recoverSubscribed.isEmpty()) {
             if (logger.isInfoEnabled()) {
@@ -397,7 +459,10 @@ public abstract class FailbackRegistry extends AbstractRegistry {
                 URL url = entry.getKey();
                 for (NotifyListener listener : entry.getValue()) {
                     // First remove other tasks to ensure that addFailedSubscribed can succeed.
+                    // 移除订阅失败时重新订阅的任务，并取消这个任务
+                    // 移除取消订阅失败时重新取消订阅的任务，并取消这个任务
                     removeFailedSubscribed(url, listener);
+                    // 添加一个失败时重新订阅的任务
                     addFailedSubscribed(url, listener);
                 }
             }

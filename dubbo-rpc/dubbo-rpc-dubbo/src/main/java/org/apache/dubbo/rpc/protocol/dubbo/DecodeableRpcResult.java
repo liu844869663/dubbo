@@ -46,16 +46,34 @@ public class DecodeableRpcResult extends AppResponse implements Codec, Decodeabl
 
     private static final Logger log = LoggerFactory.getLogger(DecodeableRpcResult.class);
 
+    /**
+     * 通道
+     */
     private Channel channel;
 
+    /**
+     * Serialization 类型编号
+     */
     private byte serializationType;
 
+    /**
+     * 输入流
+     */
     private InputStream inputStream;
 
+    /**
+     * 响应
+     */
     private Response response;
 
+    /**
+     * Invocation 对象
+     */
     private Invocation invocation;
 
+    /**
+     * 是否已经解码完成
+     */
     private volatile boolean hasDecoded;
 
     public DecodeableRpcResult(Channel channel, Response response, InputStream is, Invocation invocation, byte id) {
@@ -84,24 +102,25 @@ public class DecodeableRpcResult extends AppResponse implements Codec, Decodeabl
         ObjectInput in = CodecSupport.getSerialization(channel.getUrl(), serializationType)
                 .deserialize(channel.getUrl(), input);
 
+        // 读取标记位
         byte flag = in.readByte();
         switch (flag) {
-            case DubboCodec.RESPONSE_NULL_VALUE:
+            case DubboCodec.RESPONSE_NULL_VALUE: // 无返回值
                 break;
-            case DubboCodec.RESPONSE_VALUE:
+            case DubboCodec.RESPONSE_VALUE: // 有返回值
                 handleValue(in);
                 break;
-            case DubboCodec.RESPONSE_WITH_EXCEPTION:
+            case DubboCodec.RESPONSE_WITH_EXCEPTION: // 异常
                 handleException(in);
                 break;
-            case DubboCodec.RESPONSE_NULL_VALUE_WITH_ATTACHMENTS:
+            case DubboCodec.RESPONSE_NULL_VALUE_WITH_ATTACHMENTS: // 无返回值，有隐式参数
                 handleAttachment(in);
                 break;
-            case DubboCodec.RESPONSE_VALUE_WITH_ATTACHMENTS:
+            case DubboCodec.RESPONSE_VALUE_WITH_ATTACHMENTS: // 有返回值，且有隐式参数
                 handleValue(in);
                 handleAttachment(in);
                 break;
-            case DubboCodec.RESPONSE_WITH_EXCEPTION_WITH_ATTACHMENTS:
+            case DubboCodec.RESPONSE_WITH_EXCEPTION_WITH_ATTACHMENTS: // 异常，有隐式参数
                 handleException(in);
                 handleAttachment(in);
                 break;

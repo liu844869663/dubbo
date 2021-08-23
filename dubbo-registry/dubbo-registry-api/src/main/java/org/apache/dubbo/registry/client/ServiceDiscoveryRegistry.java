@@ -23,15 +23,13 @@ import org.apache.dubbo.common.logger.Logger;
 import org.apache.dubbo.common.logger.LoggerFactory;
 import org.apache.dubbo.common.utils.CollectionUtils;
 import org.apache.dubbo.common.utils.StringUtils;
-import org.apache.dubbo.metadata.MappingChangedEvent;
-import org.apache.dubbo.metadata.MappingListener;
-import org.apache.dubbo.metadata.ServiceNameMapping;
-import org.apache.dubbo.metadata.WritableMetadataService;
+import org.apache.dubbo.metadata.*;
 import org.apache.dubbo.registry.NotifyListener;
 import org.apache.dubbo.registry.Registry;
 import org.apache.dubbo.registry.client.event.ServiceInstancesChangedEvent;
 import org.apache.dubbo.registry.client.event.listener.ServiceInstancesChangedListener;
 import org.apache.dubbo.registry.client.metadata.SubscribedURLsSynthesizer;
+import org.apache.dubbo.registry.client.metadata.store.InMemoryWritableMetadataService;
 import org.apache.dubbo.registry.support.AbstractRegistryFactory;
 import org.apache.dubbo.registry.support.FailbackRegistry;
 
@@ -99,12 +97,26 @@ public class ServiceDiscoveryRegistry implements Registry {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass());
 
+    /**
+     * 服务发现对象，这里都是 {@link EventPublishingServiceDiscovery} 对象，是对不同协议的 ServiceDiscovery 进行增强，用于当发生某个动作时发布事件
+     *
+     * 例如 zookeeper 对应 {@link org.apache.dubbo.registry.zookeeper.ZookeeperServiceDiscovery}
+     */
     private final ServiceDiscovery serviceDiscovery;
 
+    /**
+     * 需要订阅的服务名称
+     */
     private final Set<String> subscribedServices;
 
+    /**
+     * 服务名称映射对象，默认为 {@link DynamicConfigurationServiceNameMapping}
+     */
     private final ServiceNameMapping serviceNameMapping;
 
+    /**
+     * 元数据写入对象，默认为 {@link InMemoryWritableMetadataService}
+     */
     private final WritableMetadataService writableMetadataService;
 
     private final Set<String> registeredListeners = new LinkedHashSet<>();
@@ -113,6 +125,11 @@ public class ServiceDiscoveryRegistry implements Registry {
     private final Map<String, ServiceInstancesChangedListener> serviceListeners = new HashMap<>();
     private final Map<String, String> serviceToAppsMapping = new HashMap<>();
 
+    /**
+     * 注册中心的 URL 对象
+     * 例如：`zookeeper://127.0.0.1:2181/org.apache.dubbo.registry.RegistryService?application=demo-consumer&dubbo=2.0.2&pid=8432&release=2.7.8&timestamp=1627287397524
+     * &interface=org.apache.dubbo.registry.RegistryService&refer=服务应用信息`
+     */
     private URL registryURL;
 
     /**
@@ -123,10 +140,23 @@ public class ServiceDiscoveryRegistry implements Registry {
     private final Map<String, Map<String, List<URL>>> serviceRevisionExportedURLsCache = new LinkedHashMap<>();
 
     public ServiceDiscoveryRegistry(URL registryURL) {
+        // 设置注册中心的 URL 对象
         this.registryURL = registryURL;
+        /**
+         * 根据注册中心协议通过 Dubbo SPI 创建一个 ServiceDiscovery 服务发现对象，同时会进行初始化工作
+         * 这得获取到的是 {@link EventPublishingServiceDiscovery} 对象，是对上面创建的 ServiceDiscovery 进行增强，用于当发生某个动作时发布事件
+         *
+         * 例如 {@link org.apache.dubbo.registry.zookeeper.ZookeeperServiceDiscovery} 初始化的时候会做以下事情：
+         *  1. 会使用 Curator 创建一个 Zookeeper 客户端
+         *  2. 构建一个 Curator 的 ServiceDiscovery 服务发现对象，设置了 Zookeeper 客户端和根路径
+         *  3. 启动这个服务发现对象
+         */
         this.serviceDiscovery = createServiceDiscovery(registryURL);
+        // 设置需要订阅的服务名称
         this.subscribedServices = parseServices(registryURL.getParameter(SUBSCRIBED_SERVICE_NAMES_KEY));
+        // 获取 ServiceNameMapping 服务名称映射对象，默认为 DynamicConfigurationServiceNameMapping
         this.serviceNameMapping = ServiceNameMapping.getExtension(registryURL.getParameter(MAPPING_KEY));
+        // 获取 WritableMetadataService 元数据写入对象，默认为 InMemoryWritableMetadataService
         this.writableMetadataService = WritableMetadataService.getDefaultExtension();
     }
 
@@ -141,8 +171,25 @@ public class ServiceDiscoveryRegistry implements Registry {
      * @return non-null
      */
     protected ServiceDiscovery createServiceDiscovery(URL registryURL) {
+        /**
+         * 先通过 Dubbo SPI 获取协议对应的 {@link ServiceDiscoveryFactory} 服务发现工厂对象
+         *
+         * 然后创建一个 {@link ServiceDiscovery} 服务发现对象，例如 {@link org.apache.dubbo.registry.zookeeper.ZookeeperServiceDiscovery}
+         */
         ServiceDiscovery originalServiceDiscovery = getServiceDiscovery(registryURL);
+        /**
+         * 对 ServiceDiscovery 服务发现对象进行增强
+         * 封装成 {@link EventPublishingServiceDiscovery} 对象，用于当发生某个动作时发布事件
+         */
         ServiceDiscovery serviceDiscovery = enhanceEventPublishing(originalServiceDiscovery);
+        /**
+         * 初始化 ServiceDiscovery，会做以下事情：
+         *  1. 会使用 Curator 创建一个 Zookeeper 客户端
+         *  2. 构建一个 Curator 的 ServiceDiscovery 服务发现对象，设置了 Zookeeper 客户端和根路径
+         *  3. 启动这个服务发现对象
+         *
+         * 在 {@link EventPublishingServiceDiscovery} 中，初始化的前后会发布相应的 {@link org.apache.dubbo.event.Event} 事件
+         */
         execute(() -> {
             serviceDiscovery.initialize(registryURL.addParameter(INTERFACE_KEY, ServiceDiscovery.class.getName())
                     .removeParameter(REGISTRY_TYPE_KEY));
@@ -163,7 +210,9 @@ public class ServiceDiscoveryRegistry implements Registry {
      * @return
      */
     private ServiceDiscovery getServiceDiscovery(URL registryURL) {
+        // Dubbo SPI 获取该协议对应的服务发现工厂对象，例如 zookeeper 对应 ZookeeperServiceDiscoveryFactory
         ServiceDiscoveryFactory factory = getExtension(registryURL);
+        // 创建一个服务发现对象，例如 ZookeeperServiceDiscovery
         return factory.getServiceDiscovery(registryURL);
     }
 

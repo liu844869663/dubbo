@@ -34,6 +34,8 @@ import java.util.List;
 public interface Directory<T> extends Node {
 
     /**
+     * 获取服务的类型
+     * <p>
      * get service type.
      *
      * @return service type.
@@ -41,14 +43,26 @@ public interface Directory<T> extends Node {
     Class<T> getInterface();
 
     /**
+     * 获取所有符合路由规则的服务 Invoker 集合
+     * <p>
      * list invokers.
      *
      * @return invokers
      */
     List<Invoker<T>> list(Invocation invocation) throws RpcException;
 
+    /**
+     * 获取所有服务 Invoker 集合
+     *
+     * @return invokers
+     */
     List<Invoker<T>> getAllInvokers();
 
+    /**
+     * 获取服务消费方 URL 对象
+     *
+     * @return consumer url
+     */
     URL getConsumerUrl();
 
     boolean isDestroyed();

@@ -53,11 +53,16 @@ public class DubboComponentScanRegistrar implements ImportBeanDefinitionRegistra
     @Override
     public void registerBeanDefinitions(AnnotationMetadata importingClassMetadata, BeanDefinitionRegistry registry) {
 
+        // 根据 `@DubboComponentScan` 注解获取需要扫描的包路径
         Set<String> packagesToScan = getPackagesToScan(importingClassMetadata);
 
+        // 注册一个 ServiceClassPostProcessor 对象
+        // 用于扫描指定包路径下的带有 `@DubboService` 和 `@Service` 注解的类，解析出 BeanDefinition 并注册，同时再注册一个 ServiceBean 服务提供者配置类
         registerServiceClassPostProcessor(packagesToScan, registry);
 
         // @since 2.7.6 Register the common beans
+        // 注册几个公共的工具 Bean
+        // 例如 ReferenceAnnotationBeanPostProcessor，用于处理 `@DubboReference` `@Reference` 标注的字段，解析出 ReferenceBean 注入对应的 Bean
         registerCommonBeans(registry);
     }
 
@@ -70,10 +75,14 @@ public class DubboComponentScanRegistrar implements ImportBeanDefinitionRegistra
      */
     private void registerServiceClassPostProcessor(Set<String> packagesToScan, BeanDefinitionRegistry registry) {
 
+        // 创建 ServiceClassPostProcessor 类型的 BeanDefinition
         BeanDefinitionBuilder builder = rootBeanDefinition(ServiceClassPostProcessor.class);
+        // 将需要扫描的包路径作为它的构造器入参
         builder.addConstructorArgValue(packagesToScan);
+        // 设置为内部角色
         builder.setRole(BeanDefinition.ROLE_INFRASTRUCTURE);
         AbstractBeanDefinition beanDefinition = builder.getBeanDefinition();
+        // 注册这个 ServiceClassPostProcessor 对象，并生成对应的名称
         BeanDefinitionReaderUtils.registerWithGeneratedName(beanDefinition, registry);
 
     }
@@ -90,6 +99,7 @@ public class DubboComponentScanRegistrar implements ImportBeanDefinitionRegistra
         for (Class<?> basePackageClass : basePackageClasses) {
             packagesToScan.add(ClassUtils.getPackageName(basePackageClass));
         }
+        // 默认使用 `@DubboComponentScan` 注解标注的配置类所在的包路径
         if (packagesToScan.isEmpty()) {
             return Collections.singleton(ClassUtils.getPackageName(metadata.getClassName()));
         }

@@ -54,6 +54,7 @@ public abstract class ReferenceConfigBase<T> extends AbstractReferenceConfig {
 
     /**
      * The url for peer-to-peer invocation
+     * 直连 Dubbo 服务提供者的地址
      */
     protected String url;
 

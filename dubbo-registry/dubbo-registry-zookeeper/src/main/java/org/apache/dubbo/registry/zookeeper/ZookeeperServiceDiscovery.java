@@ -55,6 +55,11 @@ public class ZookeeperServiceDiscovery extends AbstractServiceDiscovery {
 
     private final Logger logger = LoggerFactory.getLogger(getClass());
 
+    /**
+     * 注册中心的 URL 对象
+     * 例如：`zookeeper://127.0.0.1:2181/org.apache.dubbo.registry.RegistryService?application=demo-consumer&dubbo=2.0.2&pid=8432&release=2.7.8&timestamp=1627287397524
+     * &interface=org.apache.dubbo.registry.client.ServiceDiscovery&refer=服务应用信息`
+     */
     private URL registryURL;
 
     private CuratorFramework curatorFramework;
@@ -71,9 +76,13 @@ public class ZookeeperServiceDiscovery extends AbstractServiceDiscovery {
     @Override
     public void initialize(URL registryURL) throws Exception {
         this.registryURL = registryURL;
+        // 使用 Curator 创建一个 Zookeeper 客户端
         this.curatorFramework = buildCuratorFramework(registryURL);
+        // 设置根路径，默认为 `/services`
         this.rootPath = ROOT_PATH.getParameterValue(registryURL);
+        // 构建一个 Curator 的 ServiceDiscovery 服务发现对象，设置了 Zookeeper 客户端和根路径
         this.serviceDiscovery = buildServiceDiscovery(curatorFramework, rootPath);
+        // 启动这个服务发现对象
         this.serviceDiscovery.start();
     }
 

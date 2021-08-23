@@ -23,6 +23,8 @@ import org.apache.dubbo.common.logger.LoggerFactory;
 import org.apache.dubbo.common.utils.StringUtils;
 import org.apache.dubbo.remoting.zookeeper.ZookeeperClient;
 import org.apache.dubbo.remoting.zookeeper.ZookeeperTransporter;
+import org.apache.dubbo.remoting.zookeeper.curator.CuratorZookeeperClient;
+import org.apache.dubbo.remoting.zookeeper.curator.CuratorZookeeperTransporter;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -34,12 +36,19 @@ import java.util.concurrent.ConcurrentHashMap;
 import static org.apache.dubbo.common.constants.CommonConstants.TIMEOUT_KEY;
 
 /**
+ * ZookeeperTransporter 的抽象类，提供通用逻辑
+ *
  * AbstractZookeeperTransporter is abstract implements of ZookeeperTransporter.
  * <p>
  * If you want to extends this, implements createZookeeperClient.
  */
 public abstract class AbstractZookeeperTransporter implements ZookeeperTransporter {
     private static final Logger logger = LoggerFactory.getLogger(ZookeeperTransporter.class);
+    /**
+     * 缓存 Zookeeper 客户端
+     * key：注册中心地址
+     * value：注册中心客户端
+     */
     private final Map<String, ZookeeperClient> zookeeperClientMap = new ConcurrentHashMap<>();
 
     /**
@@ -54,21 +63,31 @@ public abstract class AbstractZookeeperTransporter implements ZookeeperTransport
     public ZookeeperClient connect(URL url) {
         ZookeeperClient zookeeperClient;
         // address format: {[username:password@]address}
+        // 获取注册中心的地址，集群的话返回多个
         List<String> addressList = getURLBackupAddress(url);
         // The field define the zookeeper server , including protocol, host, port, username, password
+        // 从缓存中获取该注册中心地址对应的 Zookeeper 客户端
         if ((zookeeperClient = fetchAndUpdateZookeeperClientCache(addressList)) != null && zookeeperClient.isConnected()) {
             logger.info("find valid zookeeper client from the cache for address: " + url);
             return zookeeperClient;
         }
         // avoid creating too many connections， so add lock
+        // 加锁
         synchronized (zookeeperClientMap) {
+            // 再次从缓存中获取该注册中心地址对应的 Zookeeper 客户端
             if ((zookeeperClient = fetchAndUpdateZookeeperClientCache(addressList)) != null && zookeeperClient.isConnected()) {
                 logger.info("find valid zookeeper client from the cache for address: " + url);
                 return zookeeperClient;
             }
-
+            /**
+             * 缓存中没有，则创建一个 Zookeeper 客户端
+             * 在子类 {@link CuratorZookeeperTransporter} 中返回一个 {@link CuratorZookeeperClient} 对象
+             * 在创建该对象的时候会通过 curator 构建一个 CuratorFrameworkImpl 对象，并启动它，直至启动成功，有与 zk 可用的连接（或者 5s 超时），否则抛出异常
+             * 同时会设置 zk 连接状态监听器，最终交由 {@link CuratorZookeeperClient#stateChanged(int)} 方法来处理
+             */
             zookeeperClient = createZookeeperClient(url);
             logger.info("No valid zookeeper client found from cache, therefore create a new client for url. " + url);
+            // 放入缓存中
             writeToClientMap(addressList, zookeeperClient);
         }
         return zookeeperClient;
@@ -88,7 +107,7 @@ public abstract class AbstractZookeeperTransporter implements ZookeeperTransport
      * It is not private method for unit test.
      *
      * @param addressList
-     * @return
+     * @return ZookeeperClient 客户端对象
      */
     ZookeeperClient fetchAndUpdateZookeeperClientCache(List<String> addressList) {
 
@@ -112,9 +131,12 @@ public abstract class AbstractZookeeperTransporter implements ZookeeperTransport
      */
     List<String> getURLBackupAddress(URL url) {
         List<String> addressList = new ArrayList<String>();
+        // 注册中心的地址
         addressList.add(url.getAddress());
+        // 从 URL 中获取 `backup` 参数，也作为注册中心的地址
         addressList.addAll(url.getParameter(RemotingConstants.BACKUP_KEY, Collections.EMPTY_LIST));
 
+        // 如果配置了用户名密码，则在每个注册中心地址前面添加 `用户名:密码@` 前缀
         String authPrefix = null;
         if (StringUtils.isNotEmpty(url.getUsername())) {
             StringBuilder buf = new StringBuilder();
@@ -134,8 +156,6 @@ public abstract class AbstractZookeeperTransporter implements ZookeeperTransport
             }
             return authedAddressList;
         }
-
-
         return addressList;
     }
 

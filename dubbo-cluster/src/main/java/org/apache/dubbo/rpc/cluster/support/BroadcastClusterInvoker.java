@@ -46,7 +46,9 @@ public class BroadcastClusterInvoker<T> extends AbstractClusterInvoker<T> {
     @Override
     @SuppressWarnings({"unchecked", "rawtypes"})
     public Result doInvoke(final Invocation invocation, List<Invoker<T>> invokers, LoadBalance loadbalance) throws RpcException {
+        // 如果 invokers 为空则抛出异常，表示没有服务提供者
         checkInvokers(invokers, invocation);
+        // 往上下文中将这些服务提供者的 URL 对象保存起来
         RpcContext.getContext().setInvokers((List) invokers);
         RpcException exception = null;
         Result result = null;
@@ -54,6 +56,7 @@ public class BroadcastClusterInvoker<T> extends AbstractClusterInvoker<T> {
         // The value range of broadcast.fail.threshold must be 0～100.
         // 100 means that an exception will be thrown last, and 0 means that as long as an exception occurs, it will be thrown.
         // see https://github.com/apache/dubbo/pull/7174
+        // 广播模式下多少百分比的节点出现调用失败则抛出异常，默认 100
         int broadcastFailPercent = url.getParameter(BROADCAST_FAIL_PERCENT_KEY, MAX_BROADCAST_FAIL_PERCENT);
 
         if (broadcastFailPercent < MIN_BROADCAST_FAIL_PERCENT || broadcastFailPercent > MAX_BROADCAST_FAIL_PERCENT) {
@@ -62,16 +65,20 @@ public class BroadcastClusterInvoker<T> extends AbstractClusterInvoker<T> {
             broadcastFailPercent = MAX_BROADCAST_FAIL_PERCENT;
         }
 
+        // 获取阈值
         int failThresholdIndex = invokers.size() * broadcastFailPercent / MAX_BROADCAST_FAIL_PERCENT;
         int failIndex = 0;
+        // 广播所有的服务提供者
         for (Invoker<T> invoker : invokers) {
             try {
+                // PRC 调用
                 result = invoker.invoke(invocation);
                 if (null != result && result.hasException()) {
                     Throwable resultException = result.getException();
                     if (null != resultException) {
                         exception = getRpcException(result.getException());
                         logger.warn(exception.getMessage(), exception);
+                        // 如果此时抛出异常的数量到了阈值，则直接打断，抛出异常
                         if (failIndex == failThresholdIndex) {
                             break;
                         } else {
@@ -82,6 +89,7 @@ public class BroadcastClusterInvoker<T> extends AbstractClusterInvoker<T> {
             } catch (Throwable e) {
                 exception = getRpcException(e);
                 logger.warn(exception.getMessage(), exception);
+                // 如果此时抛出异常的数量到了阈值，则直接打断，抛出异常
                 if (failIndex == failThresholdIndex) {
                     break;
                 } else {
@@ -90,6 +98,7 @@ public class BroadcastClusterInvoker<T> extends AbstractClusterInvoker<T> {
             }
         }
 
+        // 如果有一个服务提供者出现异常，则抛出异常
         if (exception != null) {
             if (failIndex == failThresholdIndex) {
                 logger.debug(

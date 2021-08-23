@@ -47,7 +47,9 @@ public interface ServiceDiscoveryFactory {
      */
     static ServiceDiscoveryFactory getExtension(URL registryURL) {
         String protocol = registryURL.getProtocol();
+        // Dubbo SPI 获取所有 ServiceDiscoveryFactory 扩展点实现类
         ExtensionLoader<ServiceDiscoveryFactory> loader = getExtensionLoader(ServiceDiscoveryFactory.class);
+        // 获取协议对应的 ServiceDiscoveryFactory 实现类，例如 ZookeeperServiceDiscoveryFactory
         return loader.getOrDefaultExtension(protocol);
     }
 }
