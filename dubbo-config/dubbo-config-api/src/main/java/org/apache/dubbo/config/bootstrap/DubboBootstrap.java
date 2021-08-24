@@ -960,7 +960,14 @@ public class DubboBootstrap {
             if (!isOnlyRegisterProvider() || hasExportedServices()) {
                 // 2. export MetadataService
                 exportMetadataService();
-                //3. Register the local ServiceInstance if required
+                /**
+                 * 3. Register the local ServiceInstance if required
+                 * 将本地的 ServiceInstance 实例对象进行注册，如果有必要的话
+                 * 参考 {@link ConfigValidationUtils#loadRegistries} 方法中最后的注释
+                 *
+                 * Dubbo 3 支持以应用粒度进行注册，例如 zk 注册 ServiceInstance 实例对象，会创建 `/services/应用名称/${host}:${port}` 节点，节点数据为这个应用的元数据信息
+                 * 实现基于应用粒度的服务发现机制
+                 */
                 registerServiceInstance();
             }
 

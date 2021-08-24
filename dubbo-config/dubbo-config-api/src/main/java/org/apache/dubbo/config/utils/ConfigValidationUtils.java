@@ -239,7 +239,15 @@ public class ConfigValidationUtils {
                 }
             }
         }
-        // 返回这些注册中心所对应的 URL 们，这里对服务提供者进行了额外判断
+        /**
+         * 返回这些注册中心所对应的 URL 们，这里对服务提供者进行了额外判断
+         * 备注：Dubbo 3 在这做了处理，会根据 `register-mode`（默认为 interface）参数进行判断
+         * 1. 如果为 `interface` 或者 `all`，则会添加一个注册中心的 URL，用于注册 `/dubbo/服务名称/provider/提供者信息` 节点
+         * 2. 如果为 `instance` 或者 `all，`，则会添加一个 Service Discovery 服务发现的 URL，会往 InMemoryWritableMetadataService 保存元数据信息，
+         *    这样一来在 {@link org.apache.dubbo.config.bootstrap.DubboBootstrap#registerServiceInstance} 方法中，创建 ServiceInstance 实例对象就可以获取到对应的元数据信息，并进行设置
+         *    然后才会往注册中心进行注册，例如 zk 会创建 `/services/应用名称/${host}:${port}` 节点，节点数据为这个应用的元数据信息
+         *    实现基于应用粒度的服务发现机制
+         */
         return genCompatibleRegistries(registryList, provider);
     }
 
